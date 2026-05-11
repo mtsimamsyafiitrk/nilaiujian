@@ -1199,9 +1199,10 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
         <label>Password</label>
         <input type="password" id="guru-password" placeholder="Min. 6 karakter">
       </div>
-      <div class="form-group">
-        <label>Mata Pelajaran yang Diampu</label>
-        <div class="mapel-chips" id="mapel-chips-container"></div>
+      <div id="guru-mapel-readonly-wrap" style="display:none;">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Mata Pelajaran yang Diampu</div>
+        <div id="guru-mapel-readonly-badges" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;"></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Pengampu diatur dari menu <strong>Mapel</strong>.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1741,20 +1742,33 @@ async function loadGuruList() {
   const card = document.getElementById('guru-list-card');
   card.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
-    const snap = await db.collection('users').where('role', '==', 'guru').get();
+    const [snap, mapelList] = await Promise.all([
+      db.collection('users').where('role', '==', 'guru').get(),
+      getMapelList(),
+    ]);
     guruList = snap.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a,b) => (a.nama||'').localeCompare(b.nama||''));
+
+    // Build reverse lookup from mapel collection: guruUid → [{nama, kelas[]}]
+    const guruMapelLookup = {};
+    mapelList.forEach(m => {
+      (m.kelas || []).forEach(k => {
+        if (!k.guruUid) return;
+        if (!guruMapelLookup[k.guruUid]) guruMapelLookup[k.guruUid] = {};
+        if (!guruMapelLookup[k.guruUid][m.id]) guruMapelLookup[k.guruUid][m.id] = { nama: m.nama, kelas: [] };
+        guruMapelLookup[k.guruUid][m.id].kelas.push(k.kelasId);
+      });
+    });
+
     if (guruList.length === 0) {
       card.innerHTML = '<div class="empty-state"><div class="icon">👨‍🏫</div><p>Belum ada guru</p></div>';
       return;
     }
     card.innerHTML = '';
     guruList.forEach(guru => {
-      const normalized = normalizeGuruMapel(guru.mapel || []);
-      const mapelItems = normalized.map(entry => {
-        const m = (mapelCache || MAPEL_LIST).find(x => x.id === entry.mapelId);
-        const nama = m ? m.nama : entry.mapelId;
+      const mapelEntries = Object.values(guruMapelLookup[guru.uid] || {});
+      const mapelItems = mapelEntries.map(entry => {
         const kelasLabel = entry.kelas && entry.kelas.length > 0 ? ` (${entry.kelas.join(', ')})` : '';
-        return nama + kelasLabel;
+        return entry.nama + kelasLabel;
       });
       const div = document.createElement('div');
       div.className = 'list-item';
@@ -1838,7 +1852,7 @@ async function showAddGuru() {
   document.getElementById('guru-email').value = '';
   document.getElementById('guru-password').value = '';
   document.getElementById('guru-password-group').style.display = 'block';
-  await populateMapelChips([]);
+  document.getElementById('guru-mapel-readonly-wrap').style.display = 'none';
   openModal('modal-guru');
 }
 
@@ -1851,7 +1865,26 @@ async function editGuru(uid) {
   document.getElementById('guru-email').value = guru.email;
   document.getElementById('guru-password').value = '';
   document.getElementById('guru-password-group').style.display = 'none';
-  await populateMapelChips(normalizeGuruMapel(guru.mapel || []));
+
+  // Show read-only subject badges derived from mapel collection
+  const mapelList = await getMapelList();
+  const badgesEl = document.getElementById('guru-mapel-readonly-badges');
+  const wrapEl = document.getElementById('guru-mapel-readonly-wrap');
+  badgesEl.innerHTML = '';
+  mapelList.forEach(m => {
+    const matched = (m.kelas || []).filter(k => k.guruUid === uid);
+    if (matched.length === 0) return;
+    const kelasList = matched.map(k => k.kelasId).join(', ');
+    const badge = document.createElement('span');
+    badge.className = 'badge badge-teal';
+    badge.style.fontSize = '11px';
+    badge.textContent = `${m.nama} (${kelasList})`;
+    badgesEl.appendChild(badge);
+  });
+  if (badgesEl.children.length === 0) {
+    badgesEl.innerHTML = '<span style="font-size:12px;color:var(--text3);">Belum ada mapel yang ditugaskan</span>';
+  }
+  wrapEl.style.display = 'block';
   openModal('modal-guru');
 }
 
@@ -1860,7 +1893,6 @@ async function saveGuru() {
   const nama = document.getElementById('guru-nama').value.trim();
   const email = document.getElementById('guru-email').value.trim();
   const pass = document.getElementById('guru-password').value;
-  const mapel = getSelectedMapelChips();
   const btn = document.getElementById('save-guru-btn');
 
   if (!nama || !email) { showToast('Nama dan email wajib diisi', 'error'); return; }
@@ -1869,16 +1901,14 @@ async function saveGuru() {
   btn.textContent = 'Menyimpan...'; btn.disabled = true;
   try {
     if (uid) {
-      // Update mapel only (cannot change email/pass via client SDK easily)
-      await db.collection('users').doc(uid).update({ nama, mapel });
+      await db.collection('users').doc(uid).update({ nama });
       showToast('Data guru diperbarui ✓', 'success');
     } else {
-      // Create new auth user & profile
-      // We use a secondary app temporarily
+      // Create new auth user & profile using a secondary app temporarily
       const secondaryApp = firebase.initializeApp(firebase.app().options, 'secondary_' + Date.now());
       const secAuth = secondaryApp.auth();
       const cred = await secAuth.createUserWithEmailAndPassword(email, pass);
-      await db.collection('users').doc(cred.user.uid).set({ nama, email, mapel, role: 'guru' });
+      await db.collection('users').doc(cred.user.uid).set({ nama, email, role: 'guru' });
       await secondaryApp.delete();
       showToast('Akun guru berhasil dibuat ✓', 'success');
     }

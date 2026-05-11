@@ -1452,6 +1452,8 @@ async function checkUserRole(uid) {
     if (doc.exists) {
       const data = doc.data();
       currentRole = data.role;
+      // Seed siswa from SISWA_DATA if Firestore collection is still empty
+      await seedSiswaIfEmpty();
       if (data.role === 'admin') {
         showPage('page-admin');
         loadAdminDashboard();
@@ -1783,7 +1785,12 @@ async function importBulkGuru() {
 async function getAllSiswa(forceRefresh = false) {
   if (siswaCache !== null && !forceRefresh) return siswaCache;
   const snap = await db.collection('siswa').orderBy('kelas').orderBy('no').get();
-  siswaCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (!snap.empty) {
+    siswaCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } else {
+    // Fallback to hardcoded SISWA_DATA while Firestore hasn't been seeded yet
+    siswaCache = SISWA_DATA.map(s => ({ id: s.nomor, ...s }));
+  }
   return siswaCache;
 }
 

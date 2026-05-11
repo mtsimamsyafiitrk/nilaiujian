@@ -2625,18 +2625,19 @@ function computeNilai(nomor) {
   const uhKeys = Array.from({length: s.jumlahUH}, (_, i) => `uh${i+1}`);
   const sumatifKeys = s.adaUTS ? [...uhKeys, 'uts'] : uhKeys;
 
-  const fVals = fKeys.map(k => {
+  const fInputs = fKeys.map(k => {
     const el = document.getElementById(`inp_${nomor}_${k}`);
     return el && el.value !== '' ? parseFloat(el.value) : null;
-  }).filter(v => v !== null);
-
-  const sVals = sumatifKeys.map(k => {
+  });
+  const sInputs = sumatifKeys.map(k => {
     const el = document.getElementById(`inp_${nomor}_${k}`);
     return el && el.value !== '' ? parseFloat(el.value) : null;
-  }).filter(v => v !== null);
+  });
 
-  const A = fVals.length > 0 ? fVals.reduce((a,b)=>a+b,0)/fVals.length : null;
-  const B = sVals.length > 0 ? sVals.reduce((a,b)=>a+b,0)/sVals.length : null;
+  const hasAnyF = fInputs.some(v => v !== null);
+  const hasAnyS = sInputs.some(v => v !== null);
+  const A = hasAnyF ? fInputs.reduce((a, b) => a + (b ?? 0), 0) / fKeys.length : null;
+  const B = hasAnyS ? sInputs.reduce((a, b) => a + (b ?? 0), 0) / sumatifKeys.length : null;
 
   let rapor = null;
   if (A !== null && B !== null) rapor = (A * s.bobotFormatif + B * s.bobotSumatif) / 100;
@@ -2693,10 +2694,12 @@ async function saveAllNilai() {
         else data[k] = null;
       });
 
-      const fVals = fKeys.map(k => data[k]).filter(v => v !== null);
-      const sVals = sumatifKeys.map(k => data[k]).filter(v => v !== null);
-      const A = fVals.length > 0 ? fVals.reduce((a,b)=>a+b,0)/fVals.length : null;
-      const B = sVals.length > 0 ? sVals.reduce((a,b)=>a+b,0)/sVals.length : null;
+      const fInputsSave = fKeys.map(k => data[k]);
+      const sInputsSave = sumatifKeys.map(k => data[k]);
+      const hasAnyFSave = fInputsSave.some(v => v !== null);
+      const hasAnySave = sInputsSave.some(v => v !== null);
+      const A = hasAnyFSave ? fInputsSave.reduce((a, b) => a + (b ?? 0), 0) / fKeys.length : null;
+      const B = hasAnySave ? sInputsSave.reduce((a, b) => a + (b ?? 0), 0) / sumatifKeys.length : null;
 
       if (A !== null && B !== null) data.nilaiRapor = (A * s.bobotFormatif + B * s.bobotSumatif) / 100;
       else if (A !== null) data.nilaiRapor = A;

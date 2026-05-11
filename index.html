@@ -1782,13 +1782,16 @@ async function importBulkGuru() {
 // FIRESTORE INDEX: siswa [kelas asc, no asc]
 async function getAllSiswa(forceRefresh = false) {
   if (siswaCache !== null && !forceRefresh) return siswaCache;
-  const snap = await db.collection('siswa').orderBy('kelas').orderBy('no').get();
-  if (!snap.empty) {
-    siswaCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  } else {
-    // Fallback to hardcoded SISWA_DATA while Firestore hasn't been seeded yet
-    siswaCache = SISWA_DATA.map(s => ({ id: s.nomor, ...s }));
+  try {
+    const snap = await db.collection('siswa').orderBy('kelas').orderBy('no').get();
+    if (!snap.empty) {
+      siswaCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      return siswaCache;
+    }
+  } catch (_) {
+    // Firestore rules belum mengizinkan collection 'siswa' — pakai data hardcode
   }
+  siswaCache = SISWA_DATA.map(s => ({ id: s.nomor, ...s }));
   return siswaCache;
 }
 

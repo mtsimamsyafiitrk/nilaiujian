@@ -852,18 +852,18 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       </div>
     </div>
     <div class="topbar-actions">
-      <button class="btn-icon" title="Logout" onclick="doLogout()">🚪</button>
+      <button class="btn-icon" title="Logout" onclick="doLogout()" style="font-size:13px;font-weight:600;">Keluar</button>
     </div>
   </div>
 
   <div class="tab-bar">
-    <div class="tab-item active" onclick="switchTab('dashboard')">🏠 Dashboard</div>
-    <div class="tab-item" onclick="switchTab('guru')">👨‍🏫 Guru</div>
-    <div class="tab-item" onclick="switchTab('siswa')">🎓 Siswa</div>
-    <div class="tab-item" onclick="switchTab('mapel')">📚 Mapel</div>
-    <div class="tab-item" onclick="switchTab('nilai')">📋 Nilai</div>
-    <div class="tab-item" onclick="switchTab('export')">📥 Export</div>
-    <div class="tab-item" onclick="switchTab('pengaturan')">⚙️ Pengaturan</div>
+    <div class="tab-item active" onclick="switchTab('dashboard')">Dashboard</div>
+    <div class="tab-item" onclick="switchTab('guru')">Guru</div>
+    <div class="tab-item" onclick="switchTab('siswa')">Siswa</div>
+    <div class="tab-item" onclick="switchTab('mapel')">Mapel</div>
+    <div class="tab-item" onclick="switchTab('nilai')">Nilai</div>
+    <div class="tab-item" onclick="switchTab('export')">Export</div>
+    <div class="tab-item" onclick="switchTab('pengaturan')">Pengaturan</div>
   </div>
 
   <!-- TAB: DASHBOARD -->
@@ -889,7 +889,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
 
     <div class="card">
       <div class="card-header">
-        <h3>📊 Progress Input Nilai</h3>
+        <h3>Progress Input Nilai</h3>
       </div>
       <div id="admin-progress-list" style="padding: 8px 0;">
         <div class="loading"><div class="spinner"></div>Memuat...</div>
@@ -902,7 +902,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
     <div class="section-header">
       <h3>Daftar Guru</h3>
       <div style="display:flex;gap:6px;">
-        <button class="btn btn-outline btn-sm" onclick="showBulkUploadGuru()">📥 Tambah Massal</button>
+        <button class="btn btn-outline btn-sm" onclick="showBulkUploadGuru()">Tambah Massal</button>
         <button class="btn btn-primary btn-sm" onclick="showAddGuru()">+ Tambah</button>
       </div>
     </div>
@@ -914,8 +914,8 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
   <!-- TAB: SISWA -->
   <div id="tab-siswa" class="tab-content">
     <div style="display:flex;background:white;border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0;">
-      <button id="siswa-subtab-btn-siswa" class="siswa-subtab-btn active" onclick="switchSiswaSubTab('siswa')">👥 Siswa</button>
-      <button id="siswa-subtab-btn-rombel" class="siswa-subtab-btn" onclick="switchSiswaSubTab('rombel')">🏫 Rombel</button>
+      <button id="siswa-subtab-btn-siswa" class="siswa-subtab-btn active" onclick="switchSiswaSubTab('siswa')">Siswa</button>
+      <button id="siswa-subtab-btn-rombel" class="siswa-subtab-btn" onclick="switchSiswaSubTab('rombel')">Rombel</button>
     </div>
 
     <!-- Sub-tab: Siswa -->
@@ -923,14 +923,14 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       <div class="section-header" style="margin-bottom:10px;">
         <h3>Data Siswa</h3>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="btn btn-outline btn-sm" onclick="downloadTemplateSiswa()" title="Download template Excel">📄 Template</button>
-          <button class="btn btn-outline btn-sm" onclick="showImportSiswa()">📂 Import</button>
+          <button class="btn btn-outline btn-sm" onclick="downloadTemplateSiswa()" title="Download template Excel">Template</button>
+          <button class="btn btn-outline btn-sm" onclick="showImportSiswa()">Import</button>
           <button class="btn btn-primary btn-sm" onclick="showAddSiswa()">+ Tambah</button>
         </div>
       </div>
       <div id="siswa-delete-bar" style="display:none;margin-bottom:8px;gap:6px;align-items:center;flex-wrap:wrap;">
-        <button class="btn btn-danger btn-sm" id="btn-hapus-terpilih" onclick="deleteSelectedSiswa()">🗑️ Hapus Terpilih (0)</button>
-        <button class="btn btn-outline btn-sm" onclick="showPindahRombel()">🏫 Pindah Rombel</button>
+        <button class="btn btn-danger btn-sm" id="btn-hapus-terpilih" onclick="deleteSelectedSiswa()">Hapus Terpilih (0)</button>
+        <button class="btn btn-outline btn-sm" onclick="showPindahRombel()">Pindah Rombel</button>
       </div>
       <div id="siswa-kelas-tabs" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
         <div class="loading" style="font-size:12px;"><div class="spinner" style="width:14px;height:14px;border-width:2px;"></div></div>
@@ -943,9 +943,9 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
     <!-- Sub-tab: Rombel -->
     <div id="siswa-sub-rombel" style="display:none;flex:1;overflow-y:auto;padding:16px;">
       <div class="section-header" style="margin-bottom:12px;">
-        <h3>🏫 Rombongan Belajar</h3>
+        <h3>Rombongan Belajar</h3>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="btn btn-danger btn-sm" id="btn-fix-kelas" onclick="fixNamaKelas()" style="display:none;">🔧 Fix Nama Kelas (XII → IX)</button>
+          <button class="btn btn-danger btn-sm" id="btn-fix-kelas" onclick="fixNamaKelas()" style="display:none;">Fix Nama Kelas (XII → IX)</button>
           <button class="btn btn-primary btn-sm" onclick="showTambahRombel()">+ Tambah Rombel</button>
         </div>
       </div>
@@ -959,12 +959,20 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
     <div class="section-header">
       <h3>Mata Pelajaran</h3>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="btn btn-outline btn-sm" id="seed-mapel-btn" style="display:none;" onclick="seedMapelData()">🌱 Seed Data Mapel</button>
-        <button class="btn btn-gold btn-sm" id="migrasi-guru-btn" style="display:none;" onclick="migrasiDataGuru()">🔄 Migrasi Data Guru Lama</button>
+        <button class="btn btn-outline btn-sm" id="seed-mapel-btn" style="display:none;" onclick="seedMapelData()">Seed Data Mapel</button>
+        <button class="btn btn-gold btn-sm" id="migrasi-guru-btn" style="display:none;" onclick="migrasiDataGuru()">Migrasi Data Guru Lama</button>
         <button class="btn btn-primary btn-sm" onclick="showAddMapel()">+ Tambah Mapel</button>
       </div>
     </div>
-    <div class="card" id="mapel-list-container">
+    <div class="card" id="mapel-list-container" style="margin-bottom:16px;">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+
+    <div class="section-header" style="margin-top:4px;">
+      <h3>Pengampu per Rombel</h3>
+      <button class="btn btn-primary btn-sm" onclick="savePengampuTable()" id="save-pengampu-btn">Simpan Pengampu</button>
+    </div>
+    <div class="card" id="pengampu-table-container" style="overflow-x:auto;">
       <div class="loading"><div class="spinner"></div></div>
     </div>
   </div>
@@ -1009,15 +1017,15 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       <h4 style="font-size:13px;font-weight:700;margin-bottom:12px;">📊 Export Gabungan (Semua Mapel)</h4>
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Export nilai rapor & ijazah semua siswa dari semua mapel.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-outline btn-sm" onclick="exportGabungan('rapor')">📄 Gabungan Rapor</button>
-        <button class="btn btn-outline btn-sm" onclick="exportGabungan('ijazah')">📜 Gabungan Ijazah</button>
+        <button class="btn btn-outline btn-sm" onclick="exportGabungan('rapor')">Gabungan Rapor</button>
+        <button class="btn btn-outline btn-sm" onclick="exportGabungan('ijazah')">Gabungan Ijazah</button>
       </div>
     </div>
   </div>
 
   <!-- TAB: PENGATURAN -->
   <div id="tab-pengaturan" class="tab-content content">
-    <div class="section-header"><h3>⚙️ Pengaturan Nilai</h3></div>
+    <div class="section-header"><h3>Pengaturan Nilai</h3></div>
 
     <!-- Default Settings -->
     <div class="card card-body" style="margin-bottom:12px;">
@@ -1044,7 +1052,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
           oninput="document.getElementById('def-bobot-formatif-label').textContent=this.value;document.getElementById('def-bobot-sumatif-label').textContent=100-this.value;"
           style="width:100%;accent-color:var(--teal);">
       </div>
-      <button class="btn btn-primary btn-full" onclick="saveDefaultSettings()">💾 Simpan Default</button>
+      <button class="btn btn-primary btn-full" onclick="saveDefaultSettings()">Simpan Default</button>
     </div>
 
     <!-- Per-Mapel Override -->
@@ -1081,8 +1089,8 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
             style="width:100%;accent-color:var(--teal);">
         </div>
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="resetMapelSettings()">🔄 Reset ke Default</button>
-          <button class="btn btn-primary btn-sm" style="flex:2;" onclick="saveMapelSettings()">💾 Simpan untuk Mapel Ini</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="resetMapelSettings()">Reset ke Default</button>
+          <button class="btn btn-primary btn-sm" style="flex:2;" onclick="saveMapelSettings()">Simpan untuk Mapel Ini</button>
         </div>
       </div>
       <div style="margin-top:14px;" id="mapel-overrides-list"></div>
@@ -1103,7 +1111,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       </div>
     </div>
     <div class="topbar-actions">
-      <button class="btn-icon" title="Logout" onclick="doLogout()">🚪</button>
+      <button class="btn-icon" title="Logout" onclick="doLogout()" style="font-size:13px;font-weight:600;">Keluar</button>
     </div>
   </div>
   <div class="content">
@@ -1132,8 +1140,8 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       </div>
     </div>
     <div class="topbar-actions" style="gap:6px;">
-      <button class="btn btn-outline btn-sm" onclick="showNilaiSettings()" title="Pengaturan bobot nilai">⚙️</button>
-      <button class="btn btn-primary btn-sm" id="save-nilai-btn" onclick="saveAllNilai()">💾 Simpan</button>
+      <button class="btn btn-outline btn-sm" onclick="showNilaiSettings()" title="Pengaturan bobot nilai">Pengaturan</button>
+      <button class="btn btn-primary btn-sm" id="save-nilai-btn" onclick="saveAllNilai()">Simpan</button>
     </div>
   </div>
   <div class="content" style="padding: 12px;">
@@ -1197,7 +1205,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       <h3 id="modal-mapel-title">Tambah Mapel</h3>
       <button class="modal-close" onclick="closeModal('modal-mapel')">✕</button>
     </div>
-    <div class="modal-body" style="overflow-y:auto;max-height:65vh;">
+    <div class="modal-body">
       <input type="hidden" id="edit-mapel-id">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
         <div class="form-group" style="margin-bottom:0;">
@@ -1205,37 +1213,32 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
           <input type="text" id="mapel-kode" placeholder="MTK" style="text-transform:uppercase;">
         </div>
         <div class="form-group" style="margin-bottom:0;">
-          <label>Icon (emoji)</label>
-          <input type="text" id="mapel-icon" placeholder="📚" style="font-size:18px;text-align:center;">
+          <label>Urutan Tampil</label>
+          <input type="number" id="mapel-urut" placeholder="1" min="1" max="99" style="text-align:center;">
         </div>
       </div>
       <div class="form-group">
         <label>Nama Mapel</label>
         <input type="text" id="mapel-nama" placeholder="Contoh: Matematika">
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="form-group" style="margin-bottom:0;">
-          <label>Kelompok</label>
+          <label>Kelompok Mapel</label>
           <div style="display:flex;gap:14px;margin-top:8px;">
             <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
-              <input type="radio" name="mapel-kelompok" value="A" checked style="accent-color:var(--teal);"> A
+              <input type="radio" name="mapel-kelompok" value="A" checked style="accent-color:var(--teal);"> A (Wajib)
             </label>
             <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
-              <input type="radio" name="mapel-kelompok" value="B" style="accent-color:var(--teal);"> B
+              <input type="radio" name="mapel-kelompok" value="B" style="accent-color:var(--teal);"> B (Muatan Lokal)
             </label>
           </div>
         </div>
         <div class="form-group" style="margin-bottom:0;">
-          <label>Urutan Tampil</label>
-          <input type="number" id="mapel-urut" placeholder="1" min="1" max="99" style="text-align:center;">
+          <label>Icon</label>
+          <input type="text" id="mapel-icon" placeholder="📚" style="font-size:18px;text-align:center;">
         </div>
       </div>
-      <div class="form-group" style="margin-bottom:0;">
-        <label style="margin-bottom:8px;display:block;">Pengampu per Kelas</label>
-        <div id="mapel-pengampu-list" style="display:flex;flex-direction:column;gap:6px;">
-          <div class="loading"><div class="spinner"></div></div>
-        </div>
-      </div>
+      <p style="font-size:11px;color:var(--text3);margin-top:10px;">Pengampu per rombel diatur di tab Mapel → tabel Pengampu.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-mapel')">Batal</button>
@@ -1259,7 +1262,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
           Nama | Email | Password | Mapel1 | Mapel2 | ...
         </p>
         <p style="font-size:11px;color:var(--text3);margin-bottom:8px;">Kolom Mapel diisi dengan format <code style="background:var(--bg);padding:1px 4px;border-radius:4px;">ID:KELAS1,KELAS2</code> (contoh: <code style="background:var(--bg);padding:1px 4px;border-radius:4px;">MTK:IX-A,IX-B</code> atau <code style="background:var(--bg);padding:1px 4px;border-radius:4px;">IPA:IX-A</code>). Jika tanpa kelas, berlaku semua kelas.</p>
-        <button class="btn btn-outline btn-sm" style="width:100%;" onclick="downloadTemplateGuru()">📄 Download Template Excel</button>
+        <button class="btn btn-outline btn-sm" style="width:100%;" onclick="downloadTemplateGuru()">Download Template Excel</button>
       </div>
       <div class="form-group">
         <label>Pilih File Excel (.xlsx)</label>
@@ -1398,7 +1401,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-header">
-      <h3 id="modal-settings-title">⚙️ Pengaturan Nilai</h3>
+      <h3 id="modal-settings-title">Pengaturan Nilai</h3>
       <button class="modal-close" onclick="closeModal('modal-pengaturan-nilai')">✕</button>
     </div>
     <div class="modal-body">
@@ -1427,8 +1430,8 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="resetGuruMapelSettings()">🔄 Default</button>
-      <button class="btn btn-primary" style="flex:2" onclick="saveGuruMapelSettings()">💾 Simpan & Terapkan</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="resetGuruMapelSettings()">Reset Default</button>
+      <button class="btn btn-primary" style="flex:2" onclick="saveGuruMapelSettings()">Simpan & Terapkan</button>
     </div>
   </div>
 </div>
@@ -1450,7 +1453,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-header">
-      <h3>🏫 Pindah Rombel</h3>
+      <h3>Pindah Rombel</h3>
       <button class="modal-close" onclick="closeModal('modal-pindah-rombel')">✕</button>
     </div>
     <div class="modal-body">
@@ -1464,7 +1467,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-pindah-rombel')">Batal</button>
-      <button class="btn btn-primary" style="flex:2" onclick="doPindahRombel()">✅ Pindahkan</button>
+      <button class="btn btn-primary" style="flex:2" onclick="doPindahRombel()">Pindahkan</button>
     </div>
   </div>
 </div>
@@ -1752,8 +1755,8 @@ async function loadGuruList() {
           </div>
         </div>
         <div style="display:flex;gap:4px;">
-          <button class="btn btn-outline btn-sm" onclick="editGuru('${guru.uid}')">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteGuru('${guru.uid}','${guru.nama}')">🗑️</button>
+          <button class="btn btn-outline btn-sm" onclick="editGuru('${guru.uid}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteGuru('${guru.uid}','${guru.nama}')">Hapus</button>
         </div>`;
       card.appendChild(div);
     });
@@ -2092,7 +2095,12 @@ async function seedMapelIfEmpty() {
 
 async function getUniqueKelas() {
   const all = await getAllSiswa();
-  return [...new Set(all.map(s => s.kelas))].sort();
+  const kelas = new Set(all.map(s => s.kelas).filter(Boolean));
+  try {
+    const rombelSnap = await db.collection('rombel').get();
+    rombelSnap.docs.forEach(d => kelas.add(d.id));
+  } catch (_) {}
+  return [...kelas].sort();
 }
 
 async function seedSiswaIfEmpty() {
@@ -2196,8 +2204,8 @@ async function loadSiswaList(kelas) {
           <div class="list-sub">NISN: ${s.nisn} · ${s.nomor}</div>
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0;">
-          <button class="btn btn-outline btn-sm" onclick="editSiswa('${s.nomor}');event.stopPropagation();">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteSiswa('${s.nomor}','${s.nama.replace(/'/g,"\\'")}');event.stopPropagation();">🗑️</button>
+          <button class="btn btn-outline btn-sm" onclick="editSiswa('${s.nomor}');event.stopPropagation();">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSiswa('${s.nomor}','${s.nama.replace(/'/g,"\\'")}');event.stopPropagation();">Hapus</button>
         </div>`;
       card.appendChild(div);
     });
@@ -2231,7 +2239,7 @@ function updateDeleteSelectedBtn() {
   const btn = document.getElementById('btn-hapus-terpilih');
   const n = selectedSiswaIds.size;
   bar.style.display = n > 0 ? 'flex' : 'none';
-  if (btn) btn.textContent = `🗑️ Hapus Terpilih (${n})`;
+  if (btn) btn.textContent = `Hapus Terpilih (${n})`;
 }
 
 async function deleteSelectedSiswa() {
@@ -2694,7 +2702,7 @@ async function resetMapelSettings() {
 async function showNilaiSettings() {
   const mapelId = currentInputMapelId;
   const mapel = (mapelCache || MAPEL_LIST).find(m => m.id === mapelId);
-  document.getElementById('modal-settings-title').textContent = `⚙️ Pengaturan — ${mapel?.nama || mapelId}`;
+  document.getElementById('modal-settings-title').textContent = `Pengaturan — ${mapel?.nama || mapelId}`;
 
   const defSettings = await getMapelSettings('__none__'); // fallback
   const actualDef = settingsCache['default'] || SETTINGS_FALLBACK;
@@ -2796,11 +2804,6 @@ async function loadMapelTab() {
     }
     container.innerHTML = '';
     mapelList.forEach(m => {
-      const kelasBadges = (m.kelas || []).length === 0
-        ? '<span class="badge badge-gray" style="font-size:10px;">Belum ada pengampu</span>'
-        : (m.kelas || []).slice(0, 4).map(k =>
-            `<span class="badge badge-teal" style="font-size:10px;">${k.kelasId}${k.guruNama ? ': ' + k.guruNama : ''}</span>`
-          ).join('') + ((m.kelas || []).length > 4 ? `<span class="badge badge-gray" style="font-size:10px;">+${(m.kelas||[]).length-4}</span>` : '');
       const div = document.createElement('div');
       div.className = 'list-item';
       div.innerHTML = `
@@ -2808,20 +2811,20 @@ async function loadMapelTab() {
         <div class="list-info">
           <div class="list-name">${m.nama}</div>
           <div class="list-sub">Kode: ${m.id} · Kel. ${m.kelompok || '—'} · Urut ${m.urut || '—'}</div>
-          <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;">${kelasBadges}</div>
         </div>
         <div style="display:flex;gap:4px;">
-          <button class="btn btn-outline btn-sm" onclick="showEditMapel('${m.id}')">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteMapel('${m.id}','${m.nama.replace(/'/g,"\\'")}')">🗑️</button>
+          <button class="btn btn-outline btn-sm" onclick="showEditMapel('${m.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMapel('${m.id}','${m.nama.replace(/'/g,"\\'")}')">Hapus</button>
         </div>`;
       container.appendChild(div);
     });
+    loadPengampuTable();
   } catch (e) {
     container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
   }
 }
 
-async function showAddMapel() {
+function showAddMapel() {
   document.getElementById('modal-mapel-title').textContent = 'Tambah Mapel';
   document.getElementById('edit-mapel-id').value = '';
   document.getElementById('mapel-kode').value = '';
@@ -2830,7 +2833,6 @@ async function showAddMapel() {
   document.getElementById('mapel-icon').value = '📚';
   document.querySelector('input[name="mapel-kelompok"][value="A"]').checked = true;
   document.getElementById('mapel-urut').value = '';
-  await buildPengampuForm([]);
   openModal('modal-mapel');
 }
 
@@ -2847,7 +2849,6 @@ async function showEditMapel(mapelId) {
   const kelRadio = document.querySelector(`input[name="mapel-kelompok"][value="${m.kelompok || 'A'}"]`);
   if (kelRadio) kelRadio.checked = true;
   document.getElementById('mapel-urut').value = m.urut || '';
-  await buildPengampuForm(m.kelas || []);
   openModal('modal-mapel');
 }
 
@@ -2889,23 +2890,15 @@ async function saveMapel() {
   if (!nama) { showToast('Nama mapel wajib diisi', 'error'); return; }
   btn.textContent = 'Menyimpan...'; btn.disabled = true;
   try {
-    const [kelasList, guruSnap] = await Promise.all([
-      getUniqueKelas(),
-      db.collection('users').where('role', '==', 'guru').get(),
-    ]);
-    const guruMap = {};
-    guruSnap.docs.forEach(d => { guruMap[d.id] = d.data().nama || ''; });
-    const kelas = kelasList.map(k => {
-      const sel = document.getElementById(`pengampu-${k}`);
-      const guruUid = sel?.value || '';
-      return { kelasId: k, guruUid, guruNama: guruUid ? (guruMap[guruUid] || '') : '' };
-    }).filter(k => k.guruUid);
     const docId = editId || kode;
-    const data = { kode, nama, icon, kelompok, urut, kelas, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-    if (!editId) data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-    await db.collection('mapel').doc(docId).set(data, { merge: !!editId });
+    const data = { kode, nama, icon, kelompok, urut, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    if (!editId) {
+      data.kelas = [];
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    }
+    await db.collection('mapel').doc(docId).set(data, { merge: true });
     mapelCache = null;
-    showToast(editId ? 'Mapel diperbarui ✓' : 'Mapel berhasil ditambahkan ✓', 'success');
+    showToast(editId ? 'Mapel diperbarui' : 'Mapel berhasil ditambahkan', 'success');
     closeModal('modal-mapel');
     loadMapelTab();
   } catch (e) {
@@ -2932,7 +2925,7 @@ async function seedMapelData() {
   const seeded = await seedMapelIfEmpty();
   showToast(seeded ? 'Data mapel berhasil di-seed ✓' : 'Collection mapel sudah ada data', seeded ? 'success' : 'info');
   if (seeded) loadMapelTab();
-  btn.textContent = '🌱 Seed Data Mapel'; btn.disabled = false;
+  btn.textContent = 'Seed Data Mapel'; btn.disabled = false;
 }
 
 // ─── GURU: MAPEL LIST ─────────────────────────────────
@@ -2986,7 +2979,7 @@ async function openInputNilai(mapelId) {
   currentInputMapelId = mapelId;
   currentNilaiSettings = null; // reset, will be loaded fresh
   const mapel = (mapelCache || MAPEL_LIST).find(m => m.id === mapelId) || {};
-  document.getElementById('input-mapel-title').textContent = `${mapel.icon || '📚'} ${mapel.nama || mapelId}`;
+  document.getElementById('input-mapel-title').textContent = `${mapel.nama || mapelId}`;
 
   // Build kelas tabs — hanya kelas yang diizinkan untuk mapel ini
   const mapelEntry = currentGuruMapel.find(e => e.mapelId === mapelId);
@@ -3248,7 +3241,7 @@ async function saveAllNilai() {
   } catch (e) {
     showToast('Gagal simpan: ' + e.message, 'error');
   }
-  btn.textContent = '💾 Simpan'; btn.disabled = false;
+  btn.textContent = 'Simpan'; btn.disabled = false;
 }
 
 function backToGuruDashboard() {
@@ -3404,6 +3397,113 @@ function showToast(msg, type = '') {
   setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, 2500);
 }
 
+// ─── PENGAMPU TABLE (MAPEL TAB) ──────────────────────
+async function loadPengampuTable() {
+  const container = document.getElementById('pengampu-table-container');
+  const saveBtn = document.getElementById('save-pengampu-btn');
+  if (!container) return;
+  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const [mapelList, kelasList, guruSnap] = await Promise.all([
+      getMapelList(),
+      getUniqueKelas(),
+      db.collection('users').where('role', '==', 'guru').get(),
+    ]);
+    const guruList = guruSnap.docs.map(d => ({ uid: d.id, ...d.data() }))
+      .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''));
+
+    if (mapelList.length === 0 || kelasList.length === 0) {
+      container.innerHTML = '<div class="empty-state" style="padding:24px;"><p style="font-size:13px;color:var(--text3);">Belum ada mapel atau rombel untuk dikonfigurasi.</p></div>';
+      if (saveBtn) saveBtn.style.display = 'none';
+      return;
+    }
+    if (saveBtn) saveBtn.style.display = '';
+
+    // Build assignment lookup: mapelId → { kelasId → { guruUid, guruNama } }
+    const assignMap = {};
+    mapelList.forEach(m => {
+      assignMap[m.id] = {};
+      (m.kelas || []).forEach(k => { assignMap[m.id][k.kelasId] = k.guruUid || ''; });
+    });
+
+    const guruOptions = guruList.map(g =>
+      `<option value="${g.uid}">${g.nama || g.uid}</option>`).join('');
+    const minW = 180 + kelasList.length * 160;
+
+    let html = `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:${minW}px;">
+      <thead>
+        <tr style="background:var(--teal-dark);">
+          <th style="padding:9px 14px;text-align:left;color:white;font-size:12px;font-weight:600;min-width:180px;position:sticky;left:0;z-index:2;background:var(--teal-dark);">Mata Pelajaran</th>
+          ${kelasList.map(k => `<th style="padding:9px 12px;text-align:center;color:white;font-size:12px;font-weight:600;min-width:160px;">${k}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>`;
+
+    mapelList.forEach((m, idx) => {
+      const bg = idx % 2 === 1 ? 'var(--surface2)' : 'white';
+      html += `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:7px 14px;font-size:13px;font-weight:600;position:sticky;left:0;z-index:1;background:${bg};border-right:2px solid var(--border2);">${m.nama}</td>`;
+      kelasList.forEach(k => {
+        const cur = (assignMap[m.id] || {})[k] || '';
+        html += `<td style="padding:4px 8px;background:${bg};">
+          <select data-mapel="${m.id}" data-kelas="${k}" style="font-size:12px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;width:100%;background:white;cursor:pointer;">
+            <option value="">— Kosong —</option>
+            ${guruOptions}
+          </select>
+        </td>`;
+      });
+      html += `</tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
+
+    // Set selected values after render
+    mapelList.forEach(m => {
+      kelasList.forEach(k => {
+        const cur = (assignMap[m.id] || {})[k] || '';
+        const sel = container.querySelector(`select[data-mapel="${m.id}"][data-kelas="${k}"]`);
+        if (sel && cur) sel.value = cur;
+      });
+    });
+
+    window._pengampuMeta = { mapelList, kelasList, guruList };
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+  }
+}
+
+async function savePengampuTable() {
+  const meta = window._pengampuMeta;
+  if (!meta) { showToast('Tabel belum dimuat', 'error'); return; }
+  const { mapelList, kelasList, guruList } = meta;
+  const guruMap = {};
+  guruList.forEach(g => { guruMap[g.uid] = g.nama || g.uid; });
+  const btn = document.getElementById('save-pengampu-btn');
+  if (btn) { btn.textContent = 'Menyimpan...'; btn.disabled = true; }
+  try {
+    const container = document.getElementById('pengampu-table-container');
+    const batch = db.batch();
+    mapelList.forEach(m => {
+      const kelas = kelasList.map(k => {
+        const sel = container.querySelector(`select[data-mapel="${m.id}"][data-kelas="${k}"]`);
+        const guruUid = sel?.value || '';
+        return guruUid ? { kelasId: k, guruUid, guruNama: guruMap[guruUid] || '' } : null;
+      }).filter(Boolean);
+      batch.update(db.collection('mapel').doc(m.id), {
+        kelas,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+    mapelCache = null;
+    showToast('Pengampu berhasil disimpan', 'success');
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+  if (btn) { btn.textContent = 'Simpan Pengampu'; btn.disabled = false; }
+}
+
 // ─── SISWA SUB-TABS ──────────────────────────────────
 function switchSiswaSubTab(tab) {
   const subSiswa = document.getElementById('siswa-sub-siswa');
@@ -3467,8 +3567,8 @@ async function loadRombelTab() {
           <div style="font-size:12px;color:var(--text3);">${r.jumlahSiswa} siswa</div>
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0;">
-          <button class="btn btn-outline btn-sm" onclick="renameRombel('${r.id}','${namaSafe}')">✏️ Rename</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteRombel('${r.id}','${namaSafe}',${r.jumlahSiswa})">🗑️ Hapus</button>
+          <button class="btn btn-outline btn-sm" onclick="renameRombel('${r.id}','${namaSafe}')">Rename</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRombel('${r.id}','${namaSafe}',${r.jumlahSiswa})">Hapus</button>
         </div>`;
       container.appendChild(card);
     });

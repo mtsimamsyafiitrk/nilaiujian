@@ -1522,8 +1522,8 @@ async function loadGuruList() {
   const card = document.getElementById('guru-list-card');
   card.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
-    const snap = await db.collection('users').where('role', '==', 'guru').orderBy('nama').get();
-    guruList = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+    const snap = await db.collection('users').where('role', '==', 'guru').get();
+    guruList = snap.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a,b) => (a.nama||'').localeCompare(b.nama||''));
     if (guruList.length === 0) {
       card.innerHTML = '<div class="empty-state"><div class="icon">👨‍🏫</div><p>Belum ada guru</p></div>';
       return;
@@ -1783,9 +1783,10 @@ async function importBulkGuru() {
 async function getAllSiswa(forceRefresh = false) {
   if (siswaCache !== null && !forceRefresh) return siswaCache;
   try {
-    const snap = await db.collection('siswa').orderBy('kelas').orderBy('no').get();
+    const snap = await db.collection('siswa').get();
     if (!snap.empty) {
-      siswaCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      siswaCache = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a,b) => a.kelas !== b.kelas ? a.kelas.localeCompare(b.kelas) : (a.no||0) - (b.no||0));
       return siswaCache;
     }
   } catch (_) {

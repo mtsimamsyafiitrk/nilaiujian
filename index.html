@@ -990,6 +990,12 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
         <option value="">-- Pilih Mapel --</option>
       </select>
     </div>
+    <div class="form-group">
+      <label>Pilih Kelas</label>
+      <select id="admin-kelas-select" onchange="loadAdminNilai()">
+        <option value="">Semua Kelas</option>
+      </select>
+    </div>
     <div id="admin-nilai-view">
       <div class="empty-state"><div class="icon">📋</div><p>Pilih mapel untuk melihat nilai</p></div>
     </div>
@@ -1064,6 +1070,12 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
         <label>Pilih Mata Pelajaran</label>
         <select id="settings-mapel-select" onchange="loadMapelSettingsForm()">
           <option value="">-- Pilih Mapel --</option>
+        </select>
+      </div>
+      <div class="form-group" id="settings-kelas-group" style="display:none;">
+        <label>Pilih Kelas <span style="font-size:11px;color:var(--text3);">(kosong = override seluruh kelas)</span></label>
+        <select id="settings-kelas-select" onchange="loadMapelSettingsForm()">
+          <option value="">-- Semua Kelas --</option>
         </select>
       </div>
       <div id="mapel-settings-form" style="display:none;">
@@ -1605,7 +1617,7 @@ function switchTab(tab) {
   if (tab === 'siswa') { initSiswaTab(); switchSiswaSubTab('siswa'); }
   if (tab === 'mapel') loadMapelTab();
   if (tab === 'dashboard') loadAdminDashboard();
-  if (tab === 'nilai') populateMapelSelect('admin-mapel-select');
+  if (tab === 'nilai') { populateMapelSelect('admin-mapel-select'); populateKelasSelect('admin-kelas-select'); }
   if (tab === 'export') { populateMapelSelect('export-mapel-select'); populateKelasSelect('export-kelas-select'); }
   if (tab === 'pengaturan') loadSettingsTab();
 }
@@ -2580,13 +2592,13 @@ async function getMapelSettings(mapelId, kelasId = null) {
   return { ...SETTINGS_FALLBACK };
 }
 
-function populateKelasSelect(selectId) {
+function populateKelasSelect(selectId, emptyLabel = 'Semua Kelas') {
   getAllSiswa().then(all => {
     const kelasList = [...new Set(all.map(s => s.kelas))].sort();
     const sel = document.getElementById(selectId);
     if (!sel) return;
     const prev = sel.value;
-    sel.innerHTML = '<option value="">Semua Kelas</option>';
+    sel.innerHTML = `<option value="">${emptyLabel}</option>`;
     kelasList.forEach(k => sel.innerHTML += `<option value="${k}">${k}</option>`);
     if (prev) sel.value = prev;
   });
@@ -2594,6 +2606,7 @@ function populateKelasSelect(selectId) {
 
 async function loadSettingsTab() {
   populateMapelSelect('settings-mapel-select');
+  populateKelasSelect('settings-kelas-select', '-- Semua Kelas (override mapel) --');
   // Load default settings
   const def = await getMapelSettings('__none__'); // gets fallback or default doc
   const defDoc = settingsCache['default'] || SETTINGS_FALLBACK;
@@ -2645,9 +2658,15 @@ async function renderMapelOverridesList() {
         const m = (mapelCache || MAPEL_LIST).find(x => x.id === mId);
         const chip = document.createElement('span');
         chip.className = 'badge badge-gold';
-        chip.style.cssText = 'margin:3px;font-size:11px;';
+        chip.style.cssText = 'margin:3px;font-size:11px;cursor:pointer;';
         chip.title = `Tugas: ${data.jumlahTugas}, UH: ${data.jumlahUH}, UTS: ${data.adaUTS?'Ya':'Tidak'}, Bobot: ${data.bobotFormatif}/${data.bobotSumatif}`;
-        chip.textContent = `${m ? m.icon + ' ' + m.nama : mId} / ${kId}`;
+        chip.textContent = `${m ? m.icon + ' ' + m.nama : mId} — ${kId}`;
+        chip.onclick = () => {
+          document.getElementById('settings-mapel-select').value = mId;
+          const kelasEl = document.getElementById('settings-kelas-select');
+          if (kelasEl) kelasEl.value = kId;
+          loadMapelSettingsForm();
+        };
         listEl.appendChild(chip);
       });
     }
@@ -2656,17 +2675,27 @@ async function renderMapelOverridesList() {
 
 async function loadMapelSettingsForm() {
   const mapelId = document.getElementById('settings-mapel-select').value;
+  const kelasEl = document.getElementById('settings-kelas-select');
+  const kelasId = kelasEl?.value || '';
   const formEl = document.getElementById('mapel-settings-form');
-  if (!mapelId) { formEl.style.display = 'none'; return; }
+  const kelasGroup = document.getElementById('settings-kelas-group');
+  if (!mapelId) {
+    formEl.style.display = 'none';
+    if (kelasGroup) kelasGroup.style.display = 'none';
+    return;
+  }
   formEl.style.display = 'block';
+  if (kelasGroup) kelasGroup.style.display = 'block';
 
   const defSettings = settingsCache['default'] || SETTINGS_FALLBACK;
-  document.getElementById('mapel-settings-default-info').textContent =
-    `Default global: ${defSettings.jumlahTugas} tugas, ${defSettings.jumlahUH} UH, UTS: ${defSettings.adaUTS?'Ya':'Tidak'}, Bobot ${defSettings.bobotFormatif}%/${defSettings.bobotSumatif}%`;
+  const contextLabel = kelasId
+    ? `Default (dari mapel/global): ${defSettings.jumlahTugas} tugas, ${defSettings.jumlahUH} UH, UTS: ${defSettings.adaUTS?'Ya':'Tidak'}, Bobot ${defSettings.bobotFormatif}%/${defSettings.bobotSumatif}%`
+    : `Default global: ${defSettings.jumlahTugas} tugas, ${defSettings.jumlahUH} UH, UTS: ${defSettings.adaUTS?'Ya':'Tidak'}, Bobot ${defSettings.bobotFormatif}%/${defSettings.bobotSumatif}%`;
+  document.getElementById('mapel-settings-default-info').textContent = contextLabel;
 
-  // Load mapel-specific settings if exists
+  const docKey = kelasId ? `${mapelId}_${kelasId}` : mapelId;
   try {
-    const doc = await db.collection('settings').doc(mapelId).get();
+    const doc = await db.collection('settings').doc(docKey).get();
     const data = doc.exists ? { ...SETTINGS_FALLBACK, ...doc.data() } : defSettings;
     document.getElementById('mp-jumlah-tugas').value = data.jumlahTugas;
     document.getElementById('mp-jumlah-uh').value = data.jumlahUH;
@@ -2698,6 +2727,8 @@ async function saveDefaultSettings() {
 async function saveMapelSettings() {
   const mapelId = document.getElementById('settings-mapel-select').value;
   if (!mapelId) return;
+  const kelasId = document.getElementById('settings-kelas-select')?.value || '';
+  const docKey = kelasId ? `${mapelId}_${kelasId}` : mapelId;
   const bobotF = parseInt(document.getElementById('mp-bobot-formatif').value) || 60;
   const data = {
     jumlahTugas: parseInt(document.getElementById('mp-jumlah-tugas').value) || 6,
@@ -2709,9 +2740,9 @@ async function saveMapelSettings() {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
   try {
-    await db.collection('settings').doc(mapelId).set(data);
-    delete settingsCache[mapelId];
-    showToast('Pengaturan mapel disimpan ✓', 'success');
+    await db.collection('settings').doc(docKey).set(data);
+    delete settingsCache[docKey];
+    showToast('Pengaturan disimpan ✓', 'success');
     renderMapelOverridesList();
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
@@ -2719,10 +2750,12 @@ async function saveMapelSettings() {
 async function resetMapelSettings() {
   const mapelId = document.getElementById('settings-mapel-select').value;
   if (!mapelId) return;
-  if (!confirm('Hapus override pengaturan mapel ini? Akan menggunakan setting default.')) return;
+  const kelasId = document.getElementById('settings-kelas-select')?.value || '';
+  const docKey = kelasId ? `${mapelId}_${kelasId}` : mapelId;
+  if (!confirm('Hapus override pengaturan ini? Akan menggunakan setting default.')) return;
   try {
-    await db.collection('settings').doc(mapelId).delete();
-    delete settingsCache[mapelId];
+    await db.collection('settings').doc(docKey).delete();
+    delete settingsCache[docKey];
     showToast('Override dihapus, kembali ke default ✓', 'success');
     loadMapelSettingsForm();
     renderMapelOverridesList();
@@ -2733,7 +2766,7 @@ async function resetMapelSettings() {
 async function showNilaiSettings() {
   const mapelId = currentInputMapelId;
   const mapel = (mapelCache || MAPEL_LIST).find(m => m.id === mapelId);
-  document.getElementById('modal-settings-title').textContent = `Pengaturan — ${mapel?.nama || mapelId}`;
+  document.getElementById('modal-settings-title').textContent = `Pengaturan — ${mapel?.nama || mapelId} · Kelas ${currentInputKelas}`;
 
   const defSettings = await getMapelSettings('__none__'); // fallback
   const actualDef = settingsCache['default'] || SETTINGS_FALLBACK;
@@ -2800,6 +2833,7 @@ async function populateMapelSelect(selectId) {
 
 async function loadAdminNilai() {
   const mapelId = document.getElementById('admin-mapel-select').value;
+  const kelas = document.getElementById('admin-kelas-select')?.value || '';
   const container = document.getElementById('admin-nilai-view');
   if (!mapelId) {
     container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Pilih mapel untuk melihat nilai</p></div>';
@@ -2810,11 +2844,12 @@ async function loadAdminNilai() {
     const [allSiswa, snap, settings] = await Promise.all([
       getAllSiswa(),
       db.collection('nilai').where('mapelId', '==', mapelId).get(),
-      getMapelSettings(mapelId),
+      getMapelSettings(mapelId, kelas || null),
     ]);
     const nilaiMap = {};
     snap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
-    container.innerHTML = renderNilaiTable(mapelId, allSiswa, nilaiMap, true, settings, settings.deskripsi || '');
+    const siswaFilter = kelas ? allSiswa.filter(sw => sw.kelas === kelas) : allSiswa;
+    container.innerHTML = renderNilaiTable(mapelId, siswaFilter, nilaiMap, true, settings, settings.deskripsi || '');
   } catch (e) {
     container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
   }

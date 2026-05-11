@@ -847,7 +847,10 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
   <div id="tab-guru" class="tab-content content">
     <div class="section-header">
       <h3>Daftar Guru</h3>
-      <button class="btn btn-primary btn-sm" onclick="showAddGuru()">+ Tambah</button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-outline btn-sm" onclick="showBulkUploadGuru()">📥 Tambah Massal</button>
+        <button class="btn btn-primary btn-sm" onclick="showAddGuru()">+ Tambah</button>
+      </div>
     </div>
     <div class="card" id="guru-list-card">
       <div class="loading"><div class="spinner"></div></div>
@@ -1005,6 +1008,55 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
     <div class="modal-footer">
       <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-guru')">Batal</button>
       <button class="btn btn-primary" style="flex:2" onclick="saveGuru()" id="save-guru-btn">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Upload Guru Modal -->
+<div id="modal-bulk-guru" class="modal-overlay">
+  <div class="modal" style="max-height:90vh;display:flex;flex-direction:column;">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3>Tambah Guru Massal</h3>
+      <button class="modal-close" onclick="closeModal('modal-bulk-guru')">✕</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1;">
+      <div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:14px;">
+        <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">Upload file Excel dengan kolom:</p>
+        <p style="font-size:11px;color:var(--text3);font-family:monospace;background:var(--bg);padding:6px 10px;border-radius:6px;margin-bottom:8px;">
+          Nama | Email | Password | Mapel1 | Mapel2 | ...
+        </p>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:8px;">Kolom Mapel diisi ID mapel (contoh: <code style="background:var(--bg);padding:1px 4px;border-radius:4px;">ALQURAN_HADIS</code>). Bisa hingga 18 kolom mapel.</p>
+        <button class="btn btn-outline btn-sm" style="width:100%;" onclick="downloadTemplateGuru()">📄 Download Template Excel</button>
+      </div>
+      <div class="form-group">
+        <label>Pilih File Excel (.xlsx)</label>
+        <input type="file" id="bulk-guru-file" accept=".xlsx,.xls" onchange="parseBulkGuruExcel(this)" style="font-size:13px;padding:8px;border:1.5px dashed var(--border);border-radius:8px;width:100%;box-sizing:border-box;background:var(--bg);">
+      </div>
+      <div id="bulk-guru-preview" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:13px;font-weight:600;">Preview Data (<span id="bulk-guru-count">0</span> guru)</span>
+          <span id="bulk-guru-error-badge" style="display:none;font-size:11px;color:#ef4444;background:#fef2f2;padding:2px 8px;border-radius:99px;"></span>
+        </div>
+        <div id="bulk-guru-table-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
+          <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead>
+              <tr style="background:var(--surface2);">
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">#</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Nama</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Email</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Mapel</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Status</th>
+              </tr>
+            </thead>
+            <tbody id="bulk-guru-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-bulk-guru')">Batal</button>
+      <button class="btn btn-primary" style="flex:2" id="import-bulk-btn" onclick="importBulkGuru()" disabled>Import Guru</button>
     </div>
   </div>
 </div>
@@ -1355,6 +1407,142 @@ async function deleteGuru(uid, nama) {
   } catch (e) {
     showToast('Error: ' + e.message, 'error');
   }
+}
+
+// ─── ADMIN: GURU BULK UPLOAD ──────────────────────────
+let bulkGuruData = [];
+
+function showBulkUploadGuru() {
+  bulkGuruData = [];
+  document.getElementById('bulk-guru-file').value = '';
+  document.getElementById('bulk-guru-preview').style.display = 'none';
+  document.getElementById('import-bulk-btn').disabled = true;
+  openModal('modal-bulk-guru');
+}
+
+function downloadTemplateGuru() {
+  const mapelHeaders = MAPEL_LIST.map(m => m.id);
+  const header = ['Nama', 'Email', 'Password', ...mapelHeaders];
+  const example = ['Ahmad Fauzi', 'ahmad.fauzi@madrasah.sch.id', 'password123',
+    'ALQURAN_HADIS', 'TAUHID', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+  const ws = XLSX.utils.aoa_to_sheet([header, example]);
+  ws['!cols'] = [{ wch: 25 }, { wch: 30 }, { wch: 15 }, ...mapelHeaders.map(() => ({ wch: 18 }))];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Template Guru');
+  XLSX.writeFile(wb, 'template_import_guru.xlsx');
+}
+
+function parseBulkGuruExcel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (rows.length < 2) { showToast('File kosong atau hanya berisi header', 'error'); return; }
+
+      const validMapelIds = new Set(MAPEL_LIST.map(m => m.id));
+      bulkGuruData = [];
+      const tbody = document.getElementById('bulk-guru-tbody');
+      tbody.innerHTML = '';
+      let errorCount = 0;
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const nama = String(row[0] || '').trim();
+        const email = String(row[1] || '').trim();
+        const pass = String(row[2] || '').trim();
+        const mapelRaw = row.slice(3).map(v => String(v || '').trim()).filter(Boolean);
+        const mapel = mapelRaw.filter(id => validMapelIds.has(id));
+        const invalidMapel = mapelRaw.filter(id => !validMapelIds.has(id));
+
+        const errors = [];
+        if (!nama) errors.push('Nama kosong');
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.push('Email tidak valid');
+        if (pass.length < 6) errors.push('Password min. 6 karakter');
+        if (invalidMapel.length > 0) errors.push(`ID mapel tidak dikenal: ${invalidMapel.join(', ')}`);
+
+        const isOk = errors.length === 0;
+        if (!isOk) errorCount++;
+
+        bulkGuruData.push({ nama, email, pass, mapel, errors, ok: isOk });
+
+        const mapelBadges = mapel.slice(0, 3).map(id => {
+          const m = MAPEL_LIST.find(x => x.id === id);
+          return `<span class="badge badge-teal" style="font-size:10px;">${m ? m.nama : id}</span>`;
+        }).join(' ') + (mapel.length > 3 ? ` <span class="badge badge-gray" style="font-size:10px;">+${mapel.length - 3}</span>` : '');
+
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid var(--border)';
+        tr.style.background = isOk ? '' : '#fef2f2';
+        tr.innerHTML = `
+          <td style="padding:5px 8px;color:var(--text3);">${i}</td>
+          <td style="padding:5px 8px;">${nama || '<em style="color:var(--text3)">—</em>'}</td>
+          <td style="padding:5px 8px;word-break:break-all;">${email || '<em style="color:var(--text3)">—</em>'}</td>
+          <td style="padding:5px 8px;">${mapelBadges || '<em style="color:var(--text3)">—</em>'}</td>
+          <td style="padding:5px 8px;">${isOk
+            ? '<span style="color:#16a34a;font-weight:600;">✓ OK</span>'
+            : `<span style="color:#ef4444;" title="${errors.join(', ')}">✗ Error</span>`}</td>`;
+        tbody.appendChild(tr);
+      }
+
+      const validCount = bulkGuruData.filter(r => r.ok).length;
+      document.getElementById('bulk-guru-count').textContent = bulkGuruData.length;
+      document.getElementById('bulk-guru-preview').style.display = 'block';
+
+      const badge = document.getElementById('bulk-guru-error-badge');
+      if (errorCount > 0) {
+        badge.textContent = `${errorCount} baris error`;
+        badge.style.display = 'inline';
+      } else {
+        badge.style.display = 'none';
+      }
+
+      const importBtn = document.getElementById('import-bulk-btn');
+      importBtn.disabled = validCount === 0;
+      importBtn.textContent = validCount > 0
+        ? `Import ${validCount} Guru` + (errorCount > 0 ? ` (lewati ${errorCount} error)` : '')
+        : 'Tidak ada data valid';
+    } catch (err) {
+      showToast('Gagal membaca file: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function importBulkGuru() {
+  const validRows = bulkGuruData.filter(r => r.ok);
+  if (validRows.length === 0) return;
+
+  const btn = document.getElementById('import-bulk-btn');
+  btn.disabled = true;
+  btn.textContent = `Mengimpor 0/${validRows.length}...`;
+
+  let success = 0, failed = 0;
+  for (let i = 0; i < validRows.length; i++) {
+    const { nama, email, pass, mapel } = validRows[i];
+    btn.textContent = `Mengimpor ${i + 1}/${validRows.length}...`;
+    try {
+      const secondaryApp = firebase.initializeApp(firebase.app().options, 'bulk_' + Date.now());
+      const secAuth = secondaryApp.auth();
+      const cred = await secAuth.createUserWithEmailAndPassword(email, pass);
+      await db.collection('users').doc(cred.user.uid).set({ nama, email, mapel, role: 'guru' });
+      await secondaryApp.delete();
+      success++;
+    } catch (e) {
+      console.error(`Gagal import ${email}:`, e.message);
+      failed++;
+    }
+  }
+
+  closeModal('modal-bulk-guru');
+  loadGuruList();
+  const msg = failed > 0
+    ? `${success} guru berhasil diimpor, ${failed} gagal`
+    : `${success} guru berhasil diimpor ✓`;
+  showToast(msg, failed > 0 ? 'error' : 'success');
 }
 
 // ─── ADMIN: SISWA LIST ────────────────────────────────

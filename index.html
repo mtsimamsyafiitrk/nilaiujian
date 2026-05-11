@@ -2555,13 +2555,23 @@ function getDeskripsiNilai(huruf, deskripsi) {
   return templates[huruf] || '';
 }
 
-async function getMapelSettings(mapelId) {
+async function getMapelSettings(mapelId, kelasId = null) {
+  // Level 1: per mapel+kelas (paling spesifik)
+  if (kelasId) {
+    const key = `${mapelId}_${kelasId}`;
+    if (settingsCache[key]) return settingsCache[key];
+    try {
+      const doc = await db.collection('settings').doc(key).get();
+      if (doc.exists) { settingsCache[key] = { ...SETTINGS_FALLBACK, ...doc.data() }; return settingsCache[key]; }
+    } catch (_) {}
+  }
+  // Level 2: per mapel saja
   if (settingsCache[mapelId]) return settingsCache[mapelId];
   try {
     const doc = await db.collection('settings').doc(mapelId).get();
     if (doc.exists) { settingsCache[mapelId] = { ...SETTINGS_FALLBACK, ...doc.data() }; return settingsCache[mapelId]; }
   } catch (_) {}
-  // Fall through to default
+  // Level 3: default global
   if (settingsCache['default']) return settingsCache['default'];
   try {
     const defDoc = await db.collection('settings').doc('default').get();
@@ -2607,21 +2617,40 @@ async function renderMapelOverridesList() {
       listEl.innerHTML = '<p style="font-size:12px;color:var(--text3);">Belum ada override per mapel.</p>';
       return;
     }
-    listEl.innerHTML = '<p style="font-size:12px;font-weight:600;margin-bottom:8px;">Override aktif:</p>';
-    overrides.forEach(d => {
-      const m = (mapelCache || MAPEL_LIST).find(x => x.id === d.id);
-      const data = d.data();
-      const chip = document.createElement('span');
-      chip.className = 'badge badge-teal';
-      chip.style.cssText = 'margin:3px;font-size:11px;cursor:pointer;';
-      chip.title = `Tugas: ${data.jumlahTugas}, UH: ${data.jumlahUH}, UTS: ${data.adaUTS?'Ya':'Tidak'}, Bobot: ${data.bobotFormatif}/${data.bobotSumatif}`;
-      chip.textContent = `${m ? m.icon + ' ' + m.nama : d.id} ✕`;
-      chip.onclick = () => {
-        document.getElementById('settings-mapel-select').value = d.id;
-        loadMapelSettingsForm();
-      };
-      listEl.appendChild(chip);
-    });
+    // Separate mapel-level and kelas-level overrides
+    const mapelOverrides = overrides.filter(d => !d.id.includes('_') || (mapelCache||MAPEL_LIST).find(x => x.id === d.id));
+    const kelasOverrides = overrides.filter(d => !mapelOverrides.includes(d));
+    listEl.innerHTML = '';
+    if (mapelOverrides.length > 0) {
+      listEl.innerHTML += '<p style="font-size:12px;font-weight:600;margin-bottom:8px;">Override per mapel:</p>';
+      mapelOverrides.forEach(d => {
+        const m = (mapelCache || MAPEL_LIST).find(x => x.id === d.id);
+        const data = d.data();
+        const chip = document.createElement('span');
+        chip.className = 'badge badge-teal';
+        chip.style.cssText = 'margin:3px;font-size:11px;cursor:pointer;';
+        chip.title = `Tugas: ${data.jumlahTugas}, UH: ${data.jumlahUH}, UTS: ${data.adaUTS?'Ya':'Tidak'}, Bobot: ${data.bobotFormatif}/${data.bobotSumatif}`;
+        chip.textContent = `${m ? m.icon + ' ' + m.nama : d.id} X`;
+        chip.onclick = () => { document.getElementById('settings-mapel-select').value = d.id; loadMapelSettingsForm(); };
+        listEl.appendChild(chip);
+      });
+    }
+    if (kelasOverrides.length > 0) {
+      listEl.innerHTML += '<p style="font-size:12px;font-weight:600;margin:8px 0;">Override per mapel+kelas (dari guru):</p>';
+      kelasOverrides.forEach(d => {
+        const data = d.data();
+        const lastUnderscore = d.id.lastIndexOf('_');
+        const mId = d.id.slice(0, lastUnderscore);
+        const kId = d.id.slice(lastUnderscore + 1);
+        const m = (mapelCache || MAPEL_LIST).find(x => x.id === mId);
+        const chip = document.createElement('span');
+        chip.className = 'badge badge-gold';
+        chip.style.cssText = 'margin:3px;font-size:11px;';
+        chip.title = `Tugas: ${data.jumlahTugas}, UH: ${data.jumlahUH}, UTS: ${data.adaUTS?'Ya':'Tidak'}, Bobot: ${data.bobotFormatif}/${data.bobotSumatif}`;
+        chip.textContent = `${m ? m.icon + ' ' + m.nama : mId} / ${kId}`;
+        listEl.appendChild(chip);
+      });
+    }
   } catch (_) {}
 }
 
@@ -2711,7 +2740,7 @@ async function showNilaiSettings() {
   document.getElementById('guru-settings-default-info').textContent =
     `Default: ${actualDef.jumlahTugas} tugas, ${actualDef.jumlahUH} UH, UTS: ${actualDef.adaUTS?'Ya':'Tidak'}, Bobot ${actualDef.bobotFormatif}%/${actualDef.bobotSumatif}%`;
 
-  const cur = currentNilaiSettings || await getMapelSettings(mapelId);
+  const cur = currentNilaiSettings || await getMapelSettings(mapelId, currentInputKelas);
   document.getElementById('guru-mp-jumlah-tugas').value = cur.jumlahTugas;
   document.getElementById('guru-mp-jumlah-uh').value = cur.jumlahUH;
   document.getElementById('guru-mp-ada-uts').checked = cur.adaUTS;
@@ -2723,6 +2752,8 @@ async function showNilaiSettings() {
 
 async function saveGuruMapelSettings() {
   const mapelId = currentInputMapelId;
+  const kelasId = currentInputKelas;
+  const settingsKey = `${mapelId}_${kelasId}`;
   const bobotF = parseInt(document.getElementById('guru-mp-bobot-formatif').value) || 60;
   const data = {
     jumlahTugas: parseInt(document.getElementById('guru-mp-jumlah-tugas').value) || 6,
@@ -2734,8 +2765,8 @@ async function saveGuruMapelSettings() {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
   try {
-    await db.collection('settings').doc(mapelId).set(data);
-    delete settingsCache[mapelId];
+    await db.collection('settings').doc(settingsKey).set(data);
+    delete settingsCache[settingsKey];
     currentNilaiSettings = { ...data };
     closeModal('modal-pengaturan-nilai');
     showToast('Pengaturan disimpan, tabel diperbarui ✓', 'success');
@@ -2745,9 +2776,10 @@ async function saveGuruMapelSettings() {
 
 async function resetGuruMapelSettings() {
   const mapelId = currentInputMapelId;
+  const settingsKey = `${mapelId}_${currentInputKelas}`;
   try {
-    await db.collection('settings').doc(mapelId).delete();
-    delete settingsCache[mapelId];
+    await db.collection('settings').doc(settingsKey).delete();
+    delete settingsCache[settingsKey];
     currentNilaiSettings = null;
     closeModal('modal-pengaturan-nilai');
     showToast('Kembali ke setting default ✓', 'success');
@@ -2998,12 +3030,7 @@ async function openInputNilai(mapelId) {
   ).join('');
 
   showPage('page-input-nilai');
-  // Load deskripsi materi dari Firestore settings
-  try {
-    const doc = await db.collection('settings').doc(mapelId).get();
-    document.getElementById('input-deskripsi-mapel').value = doc.exists ? (doc.data().deskripsi || '') : '';
-  } catch (_) { document.getElementById('input-deskripsi-mapel').value = ''; }
-  await loadInputNilaiTable();
+  await loadInputNilaiTable(); // juga memuat deskripsi per kelas
 }
 
 function switchInputKelas(kelas) {
@@ -3024,12 +3051,15 @@ async function loadInputNilaiTable() {
     const [siswa, snap, settings] = await Promise.all([
       getSiswaByKelas(currentInputKelas),
       db.collection('nilai').where('mapelId', '==', currentInputMapelId).where('kelas', '==', currentInputKelas).get(),
-      getMapelSettings(currentInputMapelId),
+      getMapelSettings(currentInputMapelId, currentInputKelas),
     ]);
     currentNilaiSettings = settings;
     const nilaiMap = {};
     snap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
-    const deskripsiInput = document.getElementById('input-deskripsi-mapel')?.value || '';
+    // Refresh deskripsi dari settings per kelas (overrides nilai sebelumnya saat ganti kelas)
+    const deskripsiEl = document.getElementById('input-deskripsi-mapel');
+    if (deskripsiEl && settings.deskripsi !== undefined) deskripsiEl.value = settings.deskripsi || '';
+    const deskripsiInput = deskripsiEl?.value || '';
     container.innerHTML = renderNilaiTable(currentInputMapelId, siswa, nilaiMap, false, settings, deskripsiInput);
   } catch (e) {
     container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
@@ -3254,13 +3284,15 @@ async function saveAllNilai() {
 
     await batch.commit();
 
-    // Simpan deskripsi materi ke settings/{mapelId}
+    // Simpan deskripsi materi ke settings/{mapelId}_{kelasId}
     const deskripsi = (document.getElementById('input-deskripsi-mapel')?.value || '').trim();
+    const deskripsiKey = `${currentInputMapelId}_${currentInputKelas}`;
     try {
-      await db.collection('settings').doc(currentInputMapelId).set(
+      await db.collection('settings').doc(deskripsiKey).set(
         { deskripsi, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
         { merge: true }
       );
+      delete settingsCache[deskripsiKey];
     } catch (_) {} // deskripsi tersimpan best-effort
 
     showToast(`${count} nilai berhasil disimpan ✓`, 'success');
@@ -3289,7 +3321,7 @@ async function exportExcel() {
     const [allSiswa, snap, settings] = await Promise.all([
       getAllSiswa(),
       db.collection('nilai').where('mapelId', '==', mapelId).get(),
-      getMapelSettings(mapelId),
+      getMapelSettings(mapelId, kelas || null),
     ]);
     const s = settings;
     const fKeys = Array.from({length: s.jumlahTugas}, (_, i) => `f${i+1}`);
@@ -3313,12 +3345,14 @@ async function exportExcel() {
     header.push(`Nilai B (Sumatif ${s.bobotSumatif}%)`, 'NILAI RAPOR', 'NILAI HURUF', 'NILAI UM', 'NILAI IJAZAH (60%R+40%UM)', 'DESKRIPSI RAPOR', 'PERINGKAT');
     rows.push(header);
 
-    // Ambil deskripsi mapel dari settings
-    let deskripsiMapel = '';
-    try {
-      const settDoc = await db.collection('settings').doc(mapelId).get();
-      if (settDoc.exists) deskripsiMapel = settDoc.data().deskripsi || '';
-    } catch (_) {}
+    // Ambil deskripsi mapel dari settings (per kelas jika ada, fallback ke per mapel)
+    let deskripsiMapel = settings.deskripsi || '';
+    if (!deskripsiMapel && kelas) {
+      try {
+        const settDoc = await db.collection('settings').doc(mapelId).get();
+        if (settDoc.exists) deskripsiMapel = settDoc.data().deskripsi || '';
+      } catch (_) {}
+    }
 
     sorted.forEach((sw, idx) => {
       const n = nilaiMap[sw.nomor] || {};

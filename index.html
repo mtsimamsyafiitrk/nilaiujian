@@ -1048,6 +1048,13 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
   </div>
   <div class="content" style="padding: 12px;">
     <div id="kelas-tabs-input" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"></div>
+    <!-- Deskripsi Materi (1 field per mapel, berlaku semua kelas) -->
+    <div class="card card-body" style="margin-bottom:12px;padding:10px 12px;">
+      <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:6px;">📝 Deskripsi Materi / Bab yang Dibahas <span style="font-weight:400;color:var(--text3);">(berlaku untuk semua kelas)</span></label>
+      <textarea id="input-deskripsi-mapel" rows="2"
+        placeholder="Contoh: Bab 1 Qur'an Hadis, Bab 2 Hukum Bacaan, Bab 3 Asmaul Husna..."
+        style="width:100%;font-size:12px;padding:8px;border:1.5px solid var(--border);border-radius:8px;resize:vertical;font-family:inherit;"></textarea>
+    </div>
     <div id="nilai-table-container">
       <div class="loading"><div class="spinner"></div></div>
     </div>
@@ -1323,46 +1330,46 @@ const MAPEL_LIST = [
 ];
 
 const SISWA_DATA = [
-  // XII-1
-  {no:1, nomor:'26-34-02-2-0006-0001', nisn:'0119921275', nama:'AHDIM', kelas:'XII-1'},
-  {no:2, nomor:'26-34-02-2-0006-0002', nisn:'0095469925', nama:'HASBI', kelas:'XII-1'},
-  {no:3, nomor:'26-34-02-2-0006-0003', nisn:'0118825093', nama:'MUH.SULKARNAIM', kelas:'XII-1'},
-  {no:4, nomor:'26-34-02-2-0006-0004', nisn:'0094008299', nama:'MUHAMMAD IQHSAN', kelas:'XII-1'},
-  {no:5, nomor:'26-34-02-2-0006-0005', nisn:'0118770913', nama:'MUHAMMAD KHAIRUL DAFFA', kelas:'XII-1'},
-  {no:6, nomor:'26-34-02-2-0006-0006', nisn:'0103435377', nama:'MUHAMMAD MUJAUWWID', kelas:'XII-1'},
-  {no:7, nomor:'26-34-02-2-0006-0007', nisn:'0108695311', nama:'MUHAMMAD SAIMIN', kelas:'XII-1'},
-  {no:8, nomor:'26-34-02-2-0006-0082', nisn:'0118325088', nama:'ABDURRAHMAN ABDAT', kelas:'XII-1'},
-  {no:9, nomor:'26-34-02-2-0006-0083', nisn:'3109589980', nama:'FAHRUL RAMADHAN', kelas:'XII-1'},
-  {no:10,nomor:'26-34-02-2-0006-0084', nisn:'3108737063', nama:'IBNU LUTHFI', kelas:'XII-1'},
-  {no:11,nomor:'26-34-02-2-0006-0085', nisn:'0118738881', nama:'MUHAMMAD ACHDAN MASSANIGA', kelas:'XII-1'},
-  {no:12,nomor:'26-34-02-2-0006-0086', nisn:'0108089356', nama:'MUHAMMAD IQBAL', kelas:'XII-1'},
-  {no:13,nomor:'26-34-02-2-0006-0087', nisn:'0108446992', nama:'MUHAMMAD NAZRI', kelas:'XII-1'},
-  {no:14,nomor:'26-34-02-2-0006-0088', nisn:'0104966195', nama:'RAMA ANANDA ILHAM', kelas:'XII-1'},
-  {no:15,nomor:'26-34-02-2-0006-0089', nisn:'0102523323', nama:'REZKI SULAIMAN', kelas:'XII-1'},
-  {no:16,nomor:'26-34-02-2-0006-0090', nisn:'0101914145', nama:'RHAFADILLA ARTHA KUSUMA', kelas:'XII-1'},
-  // XII-2
-  {no:1, nomor:'26-34-02-2-0006-0008', nisn:'0109440749', nama:'AHMAD DZAKY', kelas:'XII-2'},
-  {no:2, nomor:'26-34-02-2-0006-0009', nisn:'0088652999', nama:'ALIF NUR MUHAMMAD', kelas:'XII-2'},
-  {no:3, nomor:'26-34-02-2-0006-0010', nisn:'0109759342', nama:'FAKHRI NOOR ASLAN', kelas:'XII-2'},
-  {no:4, nomor:'26-34-02-2-0006-0011', nisn:'3092040367', nama:'HAFIZH AL-ASQALANI', kelas:'XII-2'},
-  {no:5, nomor:'26-34-02-2-0006-0012', nisn:'0096829468', nama:'IKRAM NAWIR', kelas:'XII-2'},
-  {no:6, nomor:'26-34-02-2-0006-0013', nisn:'0102212081', nama:"MU'AWWIZ", kelas:'XII-2'},
-  {no:7, nomor:'26-34-02-2-0006-0014', nisn:'0108685033', nama:'MUHAMAD DAFA ZAHY', kelas:'XII-2'},
-  {no:8, nomor:'26-34-02-2-0006-0015', nisn:'0105376787', nama:'MUHAMMAD BAIS TALIA TAMRIN', kelas:'XII-2'},
-  {no:9, nomor:'26-34-02-2-0006-0016', nisn:'0102812560', nama:'MUHAMMAD FADHIL AKMAL', kelas:'XII-2'},
-  {no:10,nomor:'26-34-02-2-0006-0017', nisn:'3107281073', nama:'MUHAMMAD FATHIR', kelas:'XII-2'},
-  {no:11,nomor:'26-34-02-2-0006-0018', nisn:'0101825036', nama:'MUHAMMAD FIQRI AS SHOBRI', kelas:'XII-2'},
-  {no:12,nomor:'26-34-02-2-0006-0019', nisn:'0106892428', nama:'MUHAMMAD HALIM HERMANSYAH', kelas:'XII-2'},
-  {no:13,nomor:'26-34-02-2-0006-0020', nisn:'0107389441', nama:'MUHAMMAD NOOR IMAN', kelas:'XII-2'},
-  {no:14,nomor:'26-34-02-2-0006-0021', nisn:'3119628467', nama:'MUHAMMAD ZEIN ABQARI', kelas:'XII-2'},
-  {no:15,nomor:'26-34-02-2-0006-0022', nisn:'0111372834', nama:'PUTRA MUHAMMAD ANDAZ ALIFAH', kelas:'XII-2'},
+  // IX-A
+  {no:1, nomor:'26-34-02-2-0006-0001', nisn:'0119921275', nama:'AHDIM', kelas:'IX-A'},
+  {no:2, nomor:'26-34-02-2-0006-0002', nisn:'0095469925', nama:'HASBI', kelas:'IX-A'},
+  {no:3, nomor:'26-34-02-2-0006-0003', nisn:'0118825093', nama:'MUH.SULKARNAIM', kelas:'IX-A'},
+  {no:4, nomor:'26-34-02-2-0006-0004', nisn:'0094008299', nama:'MUHAMMAD IQHSAN', kelas:'IX-A'},
+  {no:5, nomor:'26-34-02-2-0006-0005', nisn:'0118770913', nama:'MUHAMMAD KHAIRUL DAFFA', kelas:'IX-A'},
+  {no:6, nomor:'26-34-02-2-0006-0006', nisn:'0103435377', nama:'MUHAMMAD MUJAUWWID', kelas:'IX-A'},
+  {no:7, nomor:'26-34-02-2-0006-0007', nisn:'0108695311', nama:'MUHAMMAD SAIMIN', kelas:'IX-A'},
+  {no:8, nomor:'26-34-02-2-0006-0082', nisn:'0118325088', nama:'ABDURRAHMAN ABDAT', kelas:'IX-A'},
+  {no:9, nomor:'26-34-02-2-0006-0083', nisn:'3109589980', nama:'FAHRUL RAMADHAN', kelas:'IX-A'},
+  {no:10,nomor:'26-34-02-2-0006-0084', nisn:'3108737063', nama:'IBNU LUTHFI', kelas:'IX-A'},
+  {no:11,nomor:'26-34-02-2-0006-0085', nisn:'0118738881', nama:'MUHAMMAD ACHDAN MASSANIGA', kelas:'IX-A'},
+  {no:12,nomor:'26-34-02-2-0006-0086', nisn:'0108089356', nama:'MUHAMMAD IQBAL', kelas:'IX-A'},
+  {no:13,nomor:'26-34-02-2-0006-0087', nisn:'0108446992', nama:'MUHAMMAD NAZRI', kelas:'IX-A'},
+  {no:14,nomor:'26-34-02-2-0006-0088', nisn:'0104966195', nama:'RAMA ANANDA ILHAM', kelas:'IX-A'},
+  {no:15,nomor:'26-34-02-2-0006-0089', nisn:'0102523323', nama:'REZKI SULAIMAN', kelas:'IX-A'},
+  {no:16,nomor:'26-34-02-2-0006-0090', nisn:'0101914145', nama:'RHAFADILLA ARTHA KUSUMA', kelas:'IX-A'},
+  // IX-B
+  {no:1, nomor:'26-34-02-2-0006-0008', nisn:'0109440749', nama:'AHMAD DZAKY', kelas:'IX-B'},
+  {no:2, nomor:'26-34-02-2-0006-0009', nisn:'0088652999', nama:'ALIF NUR MUHAMMAD', kelas:'IX-B'},
+  {no:3, nomor:'26-34-02-2-0006-0010', nisn:'0109759342', nama:'FAKHRI NOOR ASLAN', kelas:'IX-B'},
+  {no:4, nomor:'26-34-02-2-0006-0011', nisn:'3092040367', nama:'HAFIZH AL-ASQALANI', kelas:'IX-B'},
+  {no:5, nomor:'26-34-02-2-0006-0012', nisn:'0096829468', nama:'IKRAM NAWIR', kelas:'IX-B'},
+  {no:6, nomor:'26-34-02-2-0006-0013', nisn:'0102212081', nama:"MU'AWWIZ", kelas:'IX-B'},
+  {no:7, nomor:'26-34-02-2-0006-0014', nisn:'0108685033', nama:'MUHAMAD DAFA ZAHY', kelas:'IX-B'},
+  {no:8, nomor:'26-34-02-2-0006-0015', nisn:'0105376787', nama:'MUHAMMAD BAIS TALIA TAMRIN', kelas:'IX-B'},
+  {no:9, nomor:'26-34-02-2-0006-0016', nisn:'0102812560', nama:'MUHAMMAD FADHIL AKMAL', kelas:'IX-B'},
+  {no:10,nomor:'26-34-02-2-0006-0017', nisn:'3107281073', nama:'MUHAMMAD FATHIR', kelas:'IX-B'},
+  {no:11,nomor:'26-34-02-2-0006-0018', nisn:'0101825036', nama:'MUHAMMAD FIQRI AS SHOBRI', kelas:'IX-B'},
+  {no:12,nomor:'26-34-02-2-0006-0019', nisn:'0106892428', nama:'MUHAMMAD HALIM HERMANSYAH', kelas:'IX-B'},
+  {no:13,nomor:'26-34-02-2-0006-0020', nisn:'0107389441', nama:'MUHAMMAD NOOR IMAN', kelas:'IX-B'},
+  {no:14,nomor:'26-34-02-2-0006-0021', nisn:'3119628467', nama:'MUHAMMAD ZEIN ABQARI', kelas:'IX-B'},
+  {no:15,nomor:'26-34-02-2-0006-0022', nisn:'0111372834', nama:'PUTRA MUHAMMAD ANDAZ ALIFAH', kelas:'IX-B'},
 ];
 
 // ─── STATE ────────────────────────────────────────────
 let db, auth, currentUser, currentRole;
 let currentGuruMapel = [];
 let currentInputMapelId = null;
-let currentInputKelas = 'XII-1';
+let currentInputKelas = 'IX-A';
 let guruList = [];
 let nilaiCache = {};
 // Siswa
@@ -2038,8 +2045,8 @@ async function deleteSiswa(nomor, nama) {
 
 function downloadTemplateSiswa() {
   const header = ['No', 'Nama', 'NISN', 'Nomor_Peserta', 'Kelas'];
-  const ex1 = [1, 'AHMAD FAUZI', '0123456789', '26-34-02-2-0006-0001', 'XII-1'];
-  const ex2 = [2, 'MUHAMMAD RIZKI', '9876543210', '26-34-02-2-0006-0002', 'XII-1'];
+  const ex1 = [1, 'AHMAD FAUZI', '0123456789', '26-34-02-2-0006-0001', 'IX-A'];
+  const ex2 = [2, 'MUHAMMAD RIZKI', '9876543210', '26-34-02-2-0006-0002', 'IX-A'];
   const ws = XLSX.utils.aoa_to_sheet([header, ex1, ex2]);
   ws['!cols'] = [{wch:4},{wch:30},{wch:12},{wch:26},{wch:8}];
   const wb = XLSX.utils.book_new();
@@ -2204,6 +2211,21 @@ async function importSiswa() {
 
 // ─── SETTINGS HELPERS ────────────────────────────────
 const SETTINGS_FALLBACK = { jumlahTugas: 6, jumlahUH: 7, adaUTS: true, bobotFormatif: 60, bobotSumatif: 40 };
+
+function getNilaiHuruf(nilai) {
+  if (nilai == null || nilai === '') return '-';
+  if (nilai >= 91) return 'A';
+  if (nilai >= 80) return 'B';
+  if (nilai >= 76) return 'C';
+  if (nilai >= 66) return 'D';
+  return 'E';
+}
+function getNilaiHurufLabel(huruf) {
+  return { A:'Sangat Baik', B:'Baik', C:'Cukup', D:'Kurang', E:'Perlu Mengulang' }[huruf] || '-';
+}
+function getNilaiHurufColor(huruf) {
+  return { A:'#16a34a', B:'#0891b2', C:'#d97706', D:'#ea580c', E:'#ef4444' }[huruf] || 'var(--text3)';
+}
 
 async function getMapelSettings(mapelId) {
   if (settingsCache[mapelId]) return settingsCache[mapelId];
@@ -2485,13 +2507,18 @@ async function openInputNilai(mapelId) {
 
   // Build kelas tabs from Firestore
   const kelasList = await getUniqueKelas();
-  currentInputKelas = kelasList[0] || 'XII-1';
+  currentInputKelas = kelasList[0] || 'IX-A';
   const klassesTabs = document.getElementById('kelas-tabs-input');
   klassesTabs.innerHTML = kelasList.map(k =>
     `<button class="btn ${k===currentInputKelas?'btn-primary':'btn-ghost'} btn-sm" onclick="switchInputKelas('${k}')">${k}</button>`
   ).join('');
 
   showPage('page-input-nilai');
+  // Load deskripsi materi dari Firestore settings
+  try {
+    const doc = await db.collection('settings').doc(mapelId).get();
+    document.getElementById('input-deskripsi-mapel').value = doc.exists ? (doc.data().deskripsi || '') : '';
+  } catch (_) { document.getElementById('input-deskripsi-mapel').value = ''; }
   await loadInputNilaiTable();
 }
 
@@ -2539,6 +2566,7 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
         <th colspan="${formatifSpan}" class="group-header">NILAI FORMATIF (Bobot ${s.bobotFormatif}%)</th>
         <th colspan="${sumatifSpan}" class="group-header">NILAI SUMATIF (Bobot ${s.bobotSumatif}%)</th>
         <th rowspan="2" style="background:var(--teal);">Nilai<br>Rapor</th>
+        <th rowspan="2" style="background:#1e40af;color:#fff;">Nilai<br>Huruf</th>
         <th rowspan="2" style="background:#7c3aed;color:#fff;">Nilai<br>UM</th>
         <th rowspan="2" style="background:#92400e;">Nilai<br>Ijazah</th>
       </tr>
@@ -2550,9 +2578,11 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
 
   siswaList.forEach(sw => {
     const n = nilaiMap[sw.nomor] || {};
-    const rapor  = n.nilaiRapor  != null ? n.nilaiRapor.toFixed(2)  : '-';
-    const um     = n.nilaiUM     != null ? n.nilaiUM.toFixed(2)      : '-';
-    const ijazah = n.nilaiIjazah != null ? n.nilaiIjazah.toFixed(2) : '-';
+    const raporVal = n.nilaiRapor  != null ? n.nilaiRapor  : null;
+    const huruf    = getNilaiHuruf(raporVal);
+    const rapor    = raporVal != null ? raporVal.toFixed(2) : '-';
+    const um       = n.nilaiUM     != null ? n.nilaiUM.toFixed(2)      : '-';
+    const ijazah   = n.nilaiIjazah != null ? n.nilaiIjazah.toFixed(2) : '-';
 
     html += `<tr><td class="sticky-col" title="${sw.nama}">${sw.nama}</td>`;
 
@@ -2561,6 +2591,7 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
       uhKeys.forEach(k => html += `<td>${n[k] != null ? n[k] : '-'}</td>`);
       if (s.adaUTS) html += `<td>${n.uts != null ? n.uts : '-'}</td>`;
       html += `<td><span class="nilai-computed rapor">${rapor}</span></td>`;
+      html += `<td style="text-align:center;"><span style="font-weight:700;font-size:15px;color:${getNilaiHurufColor(huruf)};" title="${getNilaiHurufLabel(huruf)}">${huruf}</span></td>`;
       html += `<td><span style="font-weight:700;color:#7c3aed;">${um}</span></td>`;
       html += `<td><span class="nilai-computed ijazah">${ijazah}</span></td>`;
     } else {
@@ -2573,6 +2604,7 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
           onblur="this.value=this.value?parseFloat(this.value).toFixed(0):''"></td>`;
       });
       html += `<td><span class="nilai-computed rapor" id="rap_${sw.nomor}">${rapor}</span></td>`;
+      html += `<td style="text-align:center;"><span id="hur_${sw.nomor}" style="font-weight:700;font-size:15px;color:${getNilaiHurufColor(huruf)};" title="${getNilaiHurufLabel(huruf)}">${huruf}</span></td>`;
       html += `<td><input type="number" min="0" max="100" step="0.01"
         id="inp_${sw.nomor}_um" value="${n.nilaiUM ?? ''}"
         oninput="computeNilai('${sw.nomor}')"
@@ -2618,9 +2650,16 @@ function computeNilai(nomor) {
   if (rapor !== null && um !== null) ijazah = rapor * 0.6 + um * 0.4;
   else if (rapor !== null) ijazah = rapor; // tampil sementara jika UM belum diisi
 
+  const huruf = getNilaiHuruf(rapor);
   const rapEl = document.getElementById(`rap_${nomor}`);
+  const hurEl = document.getElementById(`hur_${nomor}`);
   const ijaEl = document.getElementById(`ija_${nomor}`);
   if (rapEl) rapEl.textContent = rapor !== null ? rapor.toFixed(2) : '-';
+  if (hurEl) {
+    hurEl.textContent = huruf;
+    hurEl.style.color = getNilaiHurufColor(huruf);
+    hurEl.title = getNilaiHurufLabel(huruf);
+  }
   if (ijaEl) ijaEl.textContent = ijazah !== null ? ijazah.toFixed(2) : '-';
 }
 
@@ -2676,7 +2715,10 @@ async function saveAllNilai() {
       if (data.nilaiRapor !== null && umVal !== null)
         data.nilaiIjazah = data.nilaiRapor * 0.6 + umVal * 0.4;
       else
-        data.nilaiIjazah = data.nilaiRapor; // fallback: sama dengan rapor jika UM belum ada
+        data.nilaiIjazah = data.nilaiRapor;
+
+      // Nilai Huruf berdasarkan Nilai Rapor
+      data.nilaiHuruf = getNilaiHuruf(data.nilaiRapor);
 
       if (hasData) {
         batch.set(db.collection('nilai').doc(`${currentInputMapelId}_${sw.nomor}`), data, { merge: true });
@@ -2685,6 +2727,16 @@ async function saveAllNilai() {
     });
 
     await batch.commit();
+
+    // Simpan deskripsi materi ke settings/{mapelId}
+    const deskripsi = (document.getElementById('input-deskripsi-mapel')?.value || '').trim();
+    try {
+      await db.collection('settings').doc(currentInputMapelId).set(
+        { deskripsi, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    } catch (_) {} // deskripsi tersimpan best-effort
+
     showToast(`${count} nilai berhasil disimpan ✓`, 'success');
     loadGuruMapelList();
   } catch (e) {
@@ -2732,8 +2784,15 @@ async function exportExcel() {
     header.push(`Nilai A (Formatif ${s.bobotFormatif}%)`);
     uhKeys.forEach((_, i) => header.push(`UH ${i+1}`));
     if (s.adaUTS) header.push('UTS');
-    header.push(`Nilai B (Sumatif ${s.bobotSumatif}%)`, 'NILAI RAPOR', 'NILAI UM', 'NILAI IJAZAH (60%R+40%UM)', 'PERINGKAT');
+    header.push(`Nilai B (Sumatif ${s.bobotSumatif}%)`, 'NILAI RAPOR', 'NILAI HURUF', 'NILAI UM', 'NILAI IJAZAH (60%R+40%UM)', 'DESKRIPSI MATERI', 'PERINGKAT');
     rows.push(header);
+
+    // Ambil deskripsi mapel dari settings
+    let deskripsiMapel = '';
+    try {
+      const settDoc = await db.collection('settings').doc(mapelId).get();
+      if (settDoc.exists) deskripsiMapel = settDoc.data().deskripsi || '';
+    } catch (_) {}
 
     sorted.forEach((sw, idx) => {
       const n = nilaiMap[sw.nomor] || {};
@@ -2742,10 +2801,12 @@ async function exportExcel() {
       row.push(n.nilaiA != null ? +n.nilaiA.toFixed(2) : '');
       uhKeys.forEach(k => row.push(n[k] ?? ''));
       if (s.adaUTS) row.push(n.uts ?? '');
-      row.push(n.nilaiB != null ? +n.nilaiB.toFixed(2) : '');
+      row.push(n.nilaiB    != null ? +n.nilaiB.toFixed(2)    : '');
       row.push(n.nilaiRapor  != null ? +n.nilaiRapor.toFixed(2)  : '');
+      row.push(n.nilaiHuruf  || getNilaiHuruf(n.nilaiRapor));
       row.push(n.nilaiUM     != null ? +n.nilaiUM.toFixed(2)     : '');
       row.push(n.nilaiIjazah != null ? +n.nilaiIjazah.toFixed(2) : '');
+      row.push(deskripsiMapel);
       row.push('');
       rows.push(row);
     });

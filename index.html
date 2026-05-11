@@ -810,6 +810,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
     <div class="tab-item" onclick="switchTab('siswa')">🎓 Siswa</div>
     <div class="tab-item" onclick="switchTab('nilai')">📋 Nilai</div>
     <div class="tab-item" onclick="switchTab('export')">📥 Export</div>
+    <div class="tab-item" onclick="switchTab('pengaturan')">⚙️ Pengaturan</div>
   </div>
 
   <!-- TAB: DASHBOARD -->
@@ -859,13 +860,19 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
 
   <!-- TAB: SISWA -->
   <div id="tab-siswa" class="tab-content content">
-    <div class="section-header">
+    <div class="section-header" style="margin-bottom:10px;">
       <h3>Data Siswa</h3>
-      <span class="badge badge-teal">31 Siswa · 2 Kelas</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="downloadTemplateSiswa()" title="Download template Excel">📄 Template</button>
+        <button class="btn btn-outline btn-sm" onclick="showImportSiswa()">📂 Import</button>
+        <button class="btn btn-primary btn-sm" onclick="showAddSiswa()">+ Tambah</button>
+      </div>
+    </div>
+    <div id="siswa-delete-bar" style="display:none;margin-bottom:8px;">
+      <button class="btn btn-danger btn-sm" id="btn-hapus-terpilih" onclick="deleteSelectedSiswa()">🗑️ Hapus Terpilih (0)</button>
     </div>
     <div id="siswa-kelas-tabs" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
-      <button class="btn btn-primary btn-sm" onclick="showSiswaKelas('XII-1')">XII-1 (16)</button>
-      <button class="btn btn-ghost btn-sm" onclick="showSiswaKelas('XII-2')">XII-2 (15)</button>
+      <div class="loading" style="font-size:12px;"><div class="spinner" style="width:14px;height:14px;border-width:2px;"></div></div>
     </div>
     <div class="card" id="siswa-list-card">
       <div class="loading"><div class="spinner"></div></div>
@@ -902,8 +909,6 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
         <label>Pilih Kelas</label>
         <select id="export-kelas-select">
           <option value="">Semua Kelas</option>
-          <option value="XII-1">Kelas XII-1</option>
-          <option value="XII-2">Kelas XII-2</option>
         </select>
       </div>
       <button class="btn btn-gold btn-full" onclick="exportExcel()">
@@ -917,6 +922,80 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
         <button class="btn btn-outline btn-sm" onclick="exportGabungan('rapor')">📄 Gabungan Rapor</button>
         <button class="btn btn-outline btn-sm" onclick="exportGabungan('ijazah')">📜 Gabungan Ijazah</button>
       </div>
+    </div>
+  </div>
+
+  <!-- TAB: PENGATURAN -->
+  <div id="tab-pengaturan" class="tab-content content">
+    <div class="section-header"><h3>⚙️ Pengaturan Nilai</h3></div>
+
+    <!-- Default Settings -->
+    <div class="card card-body" style="margin-bottom:12px;">
+      <h4 style="font-size:13px;font-weight:700;margin-bottom:14px;">🌐 Pengaturan Default (Global)</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Jumlah Tugas</label>
+          <input type="number" id="def-jumlah-tugas" min="1" max="10" value="6" style="text-align:center;">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Jumlah UH</label>
+          <input type="number" id="def-jumlah-uh" min="1" max="10" value="7" style="text-align:center;">
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="def-ada-uts" checked style="width:16px;height:16px;accent-color:var(--teal);">
+          Ada UTS
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Bobot Formatif: <strong id="def-bobot-formatif-label">60</strong>% — Sumatif: <strong id="def-bobot-sumatif-label">40</strong>%</label>
+        <input type="range" id="def-bobot-formatif" min="0" max="100" value="60" step="5"
+          oninput="document.getElementById('def-bobot-formatif-label').textContent=this.value;document.getElementById('def-bobot-sumatif-label').textContent=100-this.value;"
+          style="width:100%;accent-color:var(--teal);">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="saveDefaultSettings()">💾 Simpan Default</button>
+    </div>
+
+    <!-- Per-Mapel Override -->
+    <div class="card card-body">
+      <h4 style="font-size:13px;font-weight:700;margin-bottom:14px;">📚 Pengaturan Per Mapel</h4>
+      <div class="form-group">
+        <label>Pilih Mata Pelajaran</label>
+        <select id="settings-mapel-select" onchange="loadMapelSettingsForm()">
+          <option value="">-- Pilih Mapel --</option>
+        </select>
+      </div>
+      <div id="mapel-settings-form" style="display:none;">
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;color:var(--text2);" id="mapel-settings-default-info"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Jumlah Tugas</label>
+            <input type="number" id="mp-jumlah-tugas" min="1" max="10" style="text-align:center;" placeholder="—">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Jumlah UH</label>
+            <input type="number" id="mp-jumlah-uh" min="1" max="10" style="text-align:center;" placeholder="—">
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="mp-ada-uts" style="width:16px;height:16px;accent-color:var(--teal);">
+            Ada UTS
+          </label>
+        </div>
+        <div class="form-group">
+          <label>Bobot Formatif: <strong id="mp-bobot-formatif-label">60</strong>% — Sumatif: <strong id="mp-bobot-sumatif-label">40</strong>%</label>
+          <input type="range" id="mp-bobot-formatif" min="0" max="100" value="60" step="5"
+            oninput="document.getElementById('mp-bobot-formatif-label').textContent=this.value;document.getElementById('mp-bobot-sumatif-label').textContent=100-this.value;"
+            style="width:100%;accent-color:var(--teal);">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="resetMapelSettings()">🔄 Reset ke Default</button>
+          <button class="btn btn-primary btn-sm" style="flex:2;" onclick="saveMapelSettings()">💾 Simpan untuk Mapel Ini</button>
+        </div>
+      </div>
+      <div style="margin-top:14px;" id="mapel-overrides-list"></div>
     </div>
   </div>
 </div>
@@ -962,7 +1041,8 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
         <p id="input-kelas-title" style="font-size:11px;color:var(--text3);">Kelas —</p>
       </div>
     </div>
-    <div class="topbar-actions">
+    <div class="topbar-actions" style="gap:6px;">
+      <button class="btn btn-outline btn-sm" onclick="showNilaiSettings()" title="Pengaturan bobot nilai">⚙️</button>
       <button class="btn btn-primary btn-sm" id="save-nilai-btn" onclick="saveAllNilai()">💾 Simpan</button>
     </div>
   </div>
@@ -1061,6 +1141,146 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
   </div>
 </div>
 
+<!-- Add/Edit Siswa Modal -->
+<div id="modal-siswa-form" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3 id="modal-siswa-form-title">Tambah Siswa</h3>
+      <button class="modal-close" onclick="closeModal('modal-siswa-form')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-siswa-nomor">
+      <div class="form-group">
+        <label>Nama Siswa (otomatis UPPERCASE)</label>
+        <input type="text" id="siswa-nama" placeholder="Nama lengkap siswa" oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <div class="form-group">
+        <label>NISN (10 digit, otomatis pad 0)</label>
+        <input type="text" id="siswa-nisn" placeholder="Misal: 0123456789" maxlength="10" inputmode="numeric">
+      </div>
+      <div class="form-group">
+        <label>Nomor Peserta</label>
+        <input type="text" id="siswa-nomor" placeholder="26-34-02-2-0006-0001">
+      </div>
+      <div class="form-group">
+        <label>Kelas</label>
+        <select id="siswa-kelas">
+          <option value="">-- Pilih Kelas --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>No. Urut dalam Kelas</label>
+        <input type="number" id="siswa-no" min="1" placeholder="1">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-siswa-form')">Batal</button>
+      <button class="btn btn-primary" style="flex:2" onclick="saveSiswa()" id="save-siswa-btn">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Siswa Modal -->
+<div id="modal-import-siswa" class="modal-overlay">
+  <div class="modal" style="max-height:90vh;display:flex;flex-direction:column;">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3>Import Siswa Massal</h3>
+      <button class="modal-close" onclick="closeModal('modal-import-siswa')">✕</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1;">
+      <div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:14px;">
+        <p style="font-size:12px;color:var(--text2);margin-bottom:6px;">Kolom yang dibaca (nama bebas, case-insensitive):</p>
+        <p style="font-size:11px;font-family:monospace;background:var(--bg,#fff);padding:6px 10px;border-radius:6px;margin-bottom:6px;">Nama · NISN · Nomor_Peserta · Kelas · No</p>
+        <p style="font-size:11px;color:var(--text3);">Mendukung file <strong>.xlsx</strong>, <strong>.xls</strong>, dan <strong>.csv</strong></p>
+      </div>
+      <div class="form-group">
+        <label>Pilih File Excel/CSV</label>
+        <input type="file" id="import-siswa-file" accept=".xlsx,.xls,.csv" onchange="parseSiswaFile(this)"
+          style="font-size:13px;padding:8px;border:1.5px dashed var(--border);border-radius:8px;width:100%;box-sizing:border-box;background:var(--bg,#fff);">
+      </div>
+      <div id="import-siswa-preview" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+          <span style="font-size:13px;font-weight:600;">Preview: <span id="import-siswa-count">0</span> siswa</span>
+          <span id="import-siswa-error-badge" style="display:none;font-size:11px;color:#ef4444;background:#fef2f2;padding:2px 8px;border-radius:99px;"></span>
+        </div>
+        <div id="import-siswa-summary" style="margin-bottom:10px;"></div>
+        <div id="import-siswa-table-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead>
+              <tr style="background:var(--surface2);position:sticky;top:0;">
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">#</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Nama</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">NISN</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Nomor Peserta</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Kelas</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Status</th>
+              </tr>
+            </thead>
+            <tbody id="import-siswa-tbody"></tbody>
+          </table>
+        </div>
+        <div class="form-group" style="margin-top:12px;">
+          <label style="font-size:12px;font-weight:600;">Mode Import:</label>
+          <label style="display:flex;align-items:flex-start;gap:8px;margin-top:6px;cursor:pointer;">
+            <input type="radio" name="import-mode" value="add" checked style="margin-top:3px;accent-color:var(--teal);">
+            <span style="font-size:12px;"><strong>Tambah ke data existing</strong> — siswa baru ditambahkan, siswa existing (nomor sama) diperbarui</span>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;cursor:pointer;">
+            <input type="radio" name="import-mode" value="replace" style="margin-top:3px;accent-color:var(--teal);">
+            <span style="font-size:12px;"><strong>Ganti semua data kelas yang sama</strong> — hapus dulu semua siswa di kelas yang ada di file, lalu import ulang</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-import-siswa')">Batal</button>
+      <button class="btn btn-primary" style="flex:2" id="do-import-siswa-btn" onclick="importSiswa()" disabled>Import Siswa</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pengaturan Nilai (Guru Modal) -->
+<div id="modal-pengaturan-nilai" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3 id="modal-settings-title">⚙️ Pengaturan Nilai</h3>
+      <button class="modal-close" onclick="closeModal('modal-pengaturan-nilai')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--teal-bg);border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:var(--teal-dark);" id="guru-settings-default-info"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Jumlah Tugas</label>
+          <input type="number" id="guru-mp-jumlah-tugas" min="1" max="10" style="text-align:center;">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Jumlah UH</label>
+          <input type="number" id="guru-mp-jumlah-uh" min="1" max="10" style="text-align:center;">
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="guru-mp-ada-uts" style="width:16px;height:16px;accent-color:var(--teal);">
+          Ada UTS
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Bobot Formatif: <strong id="guru-mp-bobot-formatif-label">60</strong>% — Sumatif: <strong id="guru-mp-bobot-sumatif-label">40</strong>%</label>
+        <input type="range" id="guru-mp-bobot-formatif" min="0" max="100" value="60" step="5"
+          oninput="document.getElementById('guru-mp-bobot-formatif-label').textContent=this.value;document.getElementById('guru-mp-bobot-sumatif-label').textContent=100-this.value;"
+          style="width:100%;accent-color:var(--teal);">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="resetGuruMapelSettings()">🔄 Default</button>
+      <button class="btn btn-primary" style="flex:2" onclick="saveGuruMapelSettings()">💾 Simpan & Terapkan</button>
+    </div>
+  </div>
+</div>
+
 <!-- Siswa Detail Modal -->
 <div id="modal-siswa" class="modal-overlay">
   <div class="modal">
@@ -1145,6 +1365,14 @@ let currentInputMapelId = null;
 let currentInputKelas = 'XII-1';
 let guruList = [];
 let nilaiCache = {};
+// Siswa
+let siswaCache = null;       // null = not loaded yet; array when loaded
+let selectedSiswaIds = new Set();
+let currentSiswaKelas = null;
+let bulkSiswaData = [];
+// Settings
+let settingsCache = {};      // keyed by mapelId or 'default'
+let currentNilaiSettings = null;
 
 // ─── FIREBASE CONFIG (HARDCODED) ─────────────────────
 const FIREBASE_CONFIG = {
@@ -1191,10 +1419,11 @@ function switchTab(tab) {
   if (el) el.classList.add('active');
 
   if (tab === 'guru') loadGuruList();
-  if (tab === 'siswa') { loadSiswaList('XII-1'); }
+  if (tab === 'siswa') initSiswaTab();
   if (tab === 'dashboard') loadAdminDashboard();
   if (tab === 'nilai') populateMapelSelect('admin-mapel-select');
-  if (tab === 'export') populateMapelSelect('export-mapel-select');
+  if (tab === 'export') { populateMapelSelect('export-mapel-select'); populateKelasSelect('export-kelas-select'); }
+  if (tab === 'pengaturan') loadSettingsTab();
 }
 
 // ─── AUTH ─────────────────────────────────────────────
@@ -1250,32 +1479,35 @@ async function doLogout() {
 // ─── ADMIN: DASHBOARD ─────────────────────────────────
 async function loadAdminDashboard() {
   try {
-    // Count guru
-    const guruSnap = await db.collection('users').where('role', '==', 'guru').get();
+    const [guruSnap, allSiswa] = await Promise.all([
+      db.collection('users').where('role', '==', 'guru').get(),
+      getAllSiswa(),
+    ]);
     document.getElementById('stat-guru').textContent = guruSnap.size;
+    document.getElementById('stat-siswa').textContent = allSiswa.length;
+    document.getElementById('stat-mapel').textContent = MAPEL_LIST.length;
 
-    // Count completed mapel (all students have nilai)
+    const total = allSiswa.length;
     const progressList = document.getElementById('admin-progress-list');
     progressList.innerHTML = '';
-
     let completed = 0;
+
     for (const mapel of MAPEL_LIST) {
       const snap = await db.collection('nilai').where('mapelId', '==', mapel.id).get();
       const siswaDone = new Set(snap.docs.map(d => d.data().nomorPeserta));
-      const total = SISWA_DATA.length;
       const done = siswaDone.size;
-      const pct = Math.round((done / total) * 100);
-      if (done >= total) completed++;
+      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+      if (total > 0 && done >= total) completed++;
 
       const div = document.createElement('div');
       div.style.cssText = 'padding:10px 16px;border-bottom:1px solid var(--border);';
       div.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
           <span style="font-size:13px;font-weight:600;">${mapel.icon} ${mapel.nama}</span>
-          <span class="badge ${done===total?'badge-green':'badge-gray'}">${done}/${total}</span>
+          <span class="badge ${done===total&&total>0?'badge-green':'badge-gray'}">${done}/${total}</span>
         </div>
         <div class="progress-bar">
-          <div class="progress-fill ${done===total?'':''}" style="width:${pct}%;${done===total?'background:var(--green);':''}"></div>
+          <div class="progress-fill" style="width:${pct}%;${done===total&&total>0?'background:var(--green);':''}"></div>
         </div>`;
       progressList.appendChild(div);
     }
@@ -1545,54 +1777,622 @@ async function importBulkGuru() {
   showToast(msg, failed > 0 ? 'error' : 'success');
 }
 
-// ─── ADMIN: SISWA LIST ────────────────────────────────
-function loadSiswaList(kelas) {
-  const card = document.getElementById('siswa-list-card');
-  const siswa = SISWA_DATA.filter(s => s.kelas === kelas);
-  // Update active button
-  document.querySelectorAll('#siswa-kelas-tabs button').forEach(b => {
-    b.className = b.textContent.includes(kelas) ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+// ─── FIRESTORE SISWA HELPERS ──────────────────────────
+
+// FIRESTORE INDEX: siswa [kelas asc, no asc]
+async function getAllSiswa(forceRefresh = false) {
+  if (siswaCache !== null && !forceRefresh) return siswaCache;
+  const snap = await db.collection('siswa').orderBy('kelas').orderBy('no').get();
+  siswaCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return siswaCache;
+}
+
+async function getSiswaByKelas(kelas) {
+  const all = await getAllSiswa();
+  return all.filter(s => s.kelas === kelas);
+}
+
+async function getUniqueKelas() {
+  const all = await getAllSiswa();
+  return [...new Set(all.map(s => s.kelas))].sort();
+}
+
+async function seedSiswaIfEmpty() {
+  const snap = await db.collection('siswa').limit(1).get();
+  if (!snap.empty) return;
+  // Seed from SISWA_DATA constant
+  const batch = db.batch();
+  SISWA_DATA.forEach(s => {
+    const ref = db.collection('siswa').doc(s.nomor);
+    batch.set(ref, {
+      no: s.no, nomor: s.nomor, nisn: s.nisn, nama: s.nama, kelas: s.kelas,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
   });
-  card.innerHTML = '';
-  siswa.forEach(s => {
-    const div = document.createElement('div');
-    div.className = 'list-item';
-    div.onclick = () => showSiswaDetail(s);
-    div.innerHTML = `
-      <div class="list-avatar" style="background:#e0f2fe;color:#0369a1;font-size:12px;">${s.no}</div>
-      <div class="list-info">
-        <div class="list-name">${s.nama}</div>
-        <div class="list-sub">NISN: ${s.nisn} · ${s.nomor}</div>
-      </div>
-      <div class="list-arrow">›</div>`;
-    card.appendChild(div);
+  await batch.commit();
+  siswaCache = null; // invalidate
+}
+
+function invalidateSiswaCache() { siswaCache = null; }
+
+// ─── ADMIN: SISWA TAB ─────────────────────────────────
+
+async function initSiswaTab() {
+  try {
+    await seedSiswaIfEmpty();
+    const kelasList = await getUniqueKelas();
+    // Populate kelas select in forms
+    ['siswa-kelas'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      sel.innerHTML = '<option value="">-- Pilih Kelas --</option>';
+      kelasList.forEach(k => sel.innerHTML += `<option value="${k}">${k}</option>`);
+    });
+    renderKelasFilterTabs(kelasList);
+    selectedSiswaIds.clear();
+    updateDeleteSelectedBtn();
+    const firstKelas = kelasList[0] || null;
+    if (firstKelas) loadSiswaList(firstKelas);
+  } catch (e) {
+    showToast('Gagal memuat data siswa: ' + e.message, 'error');
+  }
+}
+
+function renderKelasFilterTabs(kelasList) {
+  const tabsEl = document.getElementById('siswa-kelas-tabs');
+  tabsEl.innerHTML = '';
+  kelasList.forEach((k, i) => {
+    const btn = document.createElement('button');
+    btn.className = `btn ${i === 0 ? 'btn-primary' : 'btn-ghost'} btn-sm`;
+    btn.id = `kelas-tab-${k}`;
+    btn.textContent = k;
+    btn.onclick = () => loadSiswaList(k);
+    tabsEl.appendChild(btn);
   });
 }
 
-function showSiswaKelas(kelas) { loadSiswaList(kelas); }
+async function loadSiswaList(kelas) {
+  currentSiswaKelas = kelas;
+  // Update tab buttons
+  document.querySelectorAll('#siswa-kelas-tabs button').forEach(b => {
+    b.className = b.id === `kelas-tab-${kelas}` ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  });
 
-function showSiswaDetail(s) {
-  document.getElementById('modal-siswa-body').innerHTML = `
-    <div style="text-align:center;margin-bottom:20px;">
-      <div style="width:60px;height:60px;background:var(--teal-soft);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--teal);margin-bottom:10px;">${s.no}</div>
-      <h3 style="font-size:16px;font-weight:700;">${s.nama}</h3>
-      <span class="badge badge-teal" style="margin-top:4px;">Kelas ${s.kelas}</span>
-    </div>
-    <div style="background:var(--surface2);border-radius:var(--r);padding:14px;">
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
-        <span style="font-size:12px;color:var(--text2);">No. Urut</span>
-        <span style="font-size:12px;font-weight:600;">${s.no}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
-        <span style="font-size:12px;color:var(--text2);">NISN</span>
-        <span style="font-size:12px;font-weight:600;font-family:JetBrains Mono,monospace;">${s.nisn}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;">
-        <span style="font-size:12px;color:var(--text2);">Nomor Peserta</span>
-        <span style="font-size:12px;font-weight:600;font-family:JetBrains Mono,monospace;">${s.nomor}</span>
-      </div>
-    </div>`;
-  openModal('modal-siswa');
+  const card = document.getElementById('siswa-list-card');
+  card.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const siswa = await getSiswaByKelas(kelas);
+
+    if (siswa.length === 0) {
+      card.innerHTML = '<div class="empty-state"><div class="icon">🎓</div><p>Belum ada siswa di kelas ini</p></div>';
+      return;
+    }
+
+    // Header with select-all
+    card.innerHTML = `
+      <div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);">
+        <span style="font-size:12px;color:var(--text2);">${siswa.length} siswa</span>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          <input type="checkbox" id="select-all-siswa" onchange="toggleSelectAll(this.checked)" style="accent-color:var(--teal);">
+          Pilih Semua
+        </label>
+      </div>`;
+
+    siswa.forEach(s => {
+      const isChecked = selectedSiswaIds.has(s.nomor);
+      const div = document.createElement('div');
+      div.className = 'list-item';
+      div.id = `siswa-item-${s.nomor}`;
+      div.style.paddingLeft = '8px';
+      div.innerHTML = `
+        <input type="checkbox" class="siswa-check" data-nomor="${s.nomor}"
+          ${isChecked ? 'checked' : ''}
+          onchange="toggleSiswaSelect('${s.nomor}', this.checked)"
+          onclick="event.stopPropagation()"
+          style="accent-color:var(--teal);flex-shrink:0;">
+        <div class="list-avatar" style="background:#e0f2fe;color:#0369a1;font-size:12px;margin-left:6px;">${s.no}</div>
+        <div class="list-info">
+          <div class="list-name">${s.nama}</div>
+          <div class="list-sub">NISN: ${s.nisn} · ${s.nomor}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button class="btn btn-outline btn-sm" onclick="editSiswa('${s.nomor}');event.stopPropagation();">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSiswa('${s.nomor}','${s.nama.replace(/'/g,"\\'")}');event.stopPropagation();">🗑️</button>
+        </div>`;
+      card.appendChild(div);
+    });
+  } catch (e) {
+    card.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+  }
+}
+
+function toggleSiswaSelect(nomor, checked) {
+  if (checked) selectedSiswaIds.add(nomor);
+  else selectedSiswaIds.delete(nomor);
+  updateDeleteSelectedBtn();
+  // Update select-all state
+  const allChecks = document.querySelectorAll('.siswa-check');
+  const selectAll = document.getElementById('select-all-siswa');
+  if (selectAll) selectAll.checked = allChecks.length > 0 && [...allChecks].every(c => c.checked);
+}
+
+function toggleSelectAll(checked) {
+  document.querySelectorAll('.siswa-check').forEach(c => {
+    c.checked = checked;
+    const nomor = c.dataset.nomor;
+    if (checked) selectedSiswaIds.add(nomor);
+    else selectedSiswaIds.delete(nomor);
+  });
+  updateDeleteSelectedBtn();
+}
+
+function updateDeleteSelectedBtn() {
+  const bar = document.getElementById('siswa-delete-bar');
+  const btn = document.getElementById('btn-hapus-terpilih');
+  const n = selectedSiswaIds.size;
+  bar.style.display = n > 0 ? 'block' : 'none';
+  if (btn) btn.textContent = `🗑️ Hapus Terpilih (${n})`;
+}
+
+async function deleteSelectedSiswa() {
+  const n = selectedSiswaIds.size;
+  if (n === 0) return;
+  if (!confirm(`Hapus ${n} siswa terpilih? Data nilai mereka tidak ikut terhapus.`)) return;
+
+  const ids = [...selectedSiswaIds];
+  const CHUNK = 500;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const batch = db.batch();
+    ids.slice(i, i + CHUNK).forEach(nomor => batch.delete(db.collection('siswa').doc(nomor)));
+    await batch.commit();
+  }
+  selectedSiswaIds.clear();
+  invalidateSiswaCache();
+  showToast(`${n} siswa berhasil dihapus`, 'success');
+  loadSiswaList(currentSiswaKelas);
+  updateDeleteSelectedBtn();
+}
+
+function showAddSiswa() {
+  document.getElementById('modal-siswa-form-title').textContent = 'Tambah Siswa';
+  document.getElementById('edit-siswa-nomor').value = '';
+  document.getElementById('siswa-nama').value = '';
+  document.getElementById('siswa-nisn').value = '';
+  document.getElementById('siswa-nomor').value = '';
+  document.getElementById('siswa-no').value = '';
+  document.getElementById('siswa-kelas').value = '';
+  openModal('modal-siswa-form');
+}
+
+function editSiswa(nomor) {
+  const s = (siswaCache || []).find(x => x.nomor === nomor);
+  if (!s) return;
+  document.getElementById('modal-siswa-form-title').textContent = 'Edit Siswa';
+  document.getElementById('edit-siswa-nomor').value = nomor;
+  document.getElementById('siswa-nama').value = s.nama;
+  document.getElementById('siswa-nisn').value = s.nisn;
+  document.getElementById('siswa-nomor').value = s.nomor;
+  document.getElementById('siswa-no').value = s.no;
+  document.getElementById('siswa-kelas').value = s.kelas;
+  openModal('modal-siswa-form');
+}
+
+async function saveSiswa() {
+  const editNomor = document.getElementById('edit-siswa-nomor').value;
+  const nama = document.getElementById('siswa-nama').value.trim().toUpperCase();
+  const nisnRaw = document.getElementById('siswa-nisn').value.trim();
+  const nomor = document.getElementById('siswa-nomor').value.trim();
+  const kelas = document.getElementById('siswa-kelas').value;
+  const no = parseInt(document.getElementById('siswa-no').value) || 0;
+  const nisn = nisnRaw.padStart(10, '0');
+  const btn = document.getElementById('save-siswa-btn');
+
+  if (!nama) { showToast('Nama wajib diisi', 'error'); return; }
+  if (nisn.length !== 10 || !/^\d{10}$/.test(nisn)) { showToast('NISN harus 10 digit angka', 'error'); return; }
+  if (!nomor) { showToast('Nomor peserta wajib diisi', 'error'); return; }
+  if (!kelas) { showToast('Pilih kelas', 'error'); return; }
+  if (!no) { showToast('No. urut wajib diisi', 'error'); return; }
+
+  btn.textContent = 'Menyimpan...'; btn.disabled = true;
+  try {
+    const data = { no, nomor, nisn, nama, kelas, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    if (!editNomor) data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    await db.collection('siswa').doc(nomor).set(data, { merge: true });
+    // If nomor changed during edit, delete old doc
+    if (editNomor && editNomor !== nomor) await db.collection('siswa').doc(editNomor).delete();
+    invalidateSiswaCache();
+    closeModal('modal-siswa-form');
+    showToast(editNomor ? 'Data siswa diperbarui ✓' : 'Siswa berhasil ditambahkan ✓', 'success');
+    await initSiswaTab();
+    loadSiswaList(kelas);
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+  btn.textContent = 'Simpan'; btn.disabled = false;
+}
+
+async function deleteSiswa(nomor, nama) {
+  if (!confirm(`Hapus siswa "${nama}"? Data nilai mereka tidak ikut terhapus.`)) return;
+  try {
+    await db.collection('siswa').doc(nomor).delete();
+    selectedSiswaIds.delete(nomor);
+    invalidateSiswaCache();
+    showToast('Siswa dihapus', 'success');
+    updateDeleteSelectedBtn();
+    loadSiswaList(currentSiswaKelas);
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+function downloadTemplateSiswa() {
+  const header = ['No', 'Nama', 'NISN', 'Nomor_Peserta', 'Kelas'];
+  const ex1 = [1, 'AHMAD FAUZI', '0123456789', '26-34-02-2-0006-0001', 'XII-1'];
+  const ex2 = [2, 'MUHAMMAD RIZKI', '9876543210', '26-34-02-2-0006-0002', 'XII-1'];
+  const ws = XLSX.utils.aoa_to_sheet([header, ex1, ex2]);
+  ws['!cols'] = [{wch:4},{wch:30},{wch:12},{wch:26},{wch:8}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Template Siswa');
+  XLSX.writeFile(wb, 'template_import_siswa.xlsx');
+}
+
+// ─── ADMIN: IMPORT SISWA MASSAL ───────────────────────
+
+function showImportSiswa() {
+  bulkSiswaData = [];
+  document.getElementById('import-siswa-file').value = '';
+  document.getElementById('import-siswa-preview').style.display = 'none';
+  document.getElementById('do-import-siswa-btn').disabled = true;
+  openModal('modal-import-siswa');
+}
+
+function parseSiswaFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (rows.length < 2) { showToast('File kosong atau hanya header', 'error'); return; }
+
+      const headers = rows[0].map(h => String(h).toLowerCase().trim().replace(/\s+/g,'_'));
+      const getCol = (...aliases) => {
+        for (const a of aliases) {
+          const idx = headers.indexOf(a);
+          if (idx >= 0) return idx;
+        }
+        return -1;
+      };
+
+      const colNama   = getCol('nama');
+      const colNisn   = getCol('nisn');
+      const colNomor  = getCol('nomor_peserta', 'nomor', 'no_peserta');
+      const colKelas  = getCol('kelas');
+      const colNo     = getCol('no', 'no.');
+
+      bulkSiswaData = [];
+      const tbody = document.getElementById('import-siswa-tbody');
+      tbody.innerHTML = '';
+      let errorCount = 0;
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.every(v => String(v).trim() === '')) continue; // skip empty rows
+
+        const namaRaw = colNama >= 0 ? String(row[colNama] || '').trim() : '';
+        const nama = namaRaw.toUpperCase();
+        const nisnRaw = colNisn >= 0 ? String(row[colNisn] || '').replace(/\D/g, '') : '';
+        const nisn = nisnRaw.padStart(10, '0');
+        const nomor = colNomor >= 0 ? String(row[colNomor] || '').trim() : '';
+        const kelas = colKelas >= 0 ? String(row[colKelas] || '').trim() : '';
+        const no = colNo >= 0 ? parseInt(row[colNo]) || 0 : 0;
+
+        const errors = [];
+        if (!nama) errors.push('Nama kosong');
+        if (!/^\d{10}$/.test(nisn)) errors.push('NISN tidak valid');
+        if (!nomor) errors.push('Nomor peserta kosong');
+        if (!kelas) errors.push('Kelas kosong');
+
+        const isOk = errors.length === 0;
+        if (!isOk) errorCount++;
+        bulkSiswaData.push({ no, nama, nisn, nomor, kelas, errors, ok: isOk });
+
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid var(--border)';
+        tr.style.background = isOk ? '' : '#fef2f2';
+        tr.innerHTML = `
+          <td style="padding:4px 8px;color:var(--text3);">${i}</td>
+          <td style="padding:4px 8px;">${nama||'—'}</td>
+          <td style="padding:4px 8px;font-family:monospace;">${nisn||'—'}</td>
+          <td style="padding:4px 8px;font-family:monospace;font-size:10px;">${nomor||'—'}</td>
+          <td style="padding:4px 8px;">${kelas||'—'}</td>
+          <td style="padding:4px 8px;">${isOk
+            ? '<span style="color:#16a34a;font-weight:600;">✓</span>'
+            : `<span style="color:#ef4444;" title="${errors.join(', ')}">✗</span>`}</td>`;
+        tbody.appendChild(tr);
+      }
+
+      const validCount = bulkSiswaData.filter(r => r.ok).length;
+      document.getElementById('import-siswa-count').textContent = bulkSiswaData.length;
+
+      // Summary per kelas
+      const byKelas = {};
+      bulkSiswaData.filter(r => r.ok).forEach(r => { byKelas[r.kelas] = (byKelas[r.kelas] || 0) + 1; });
+      document.getElementById('import-siswa-summary').innerHTML = Object.entries(byKelas).map(([k, n]) =>
+        `<span class="badge badge-teal" style="margin-right:4px;">${k}: ${n} siswa</span>`).join('');
+
+      const badge = document.getElementById('import-siswa-error-badge');
+      badge.style.display = errorCount > 0 ? 'inline' : 'none';
+      badge.textContent = `${errorCount} baris error`;
+
+      document.getElementById('import-siswa-preview').style.display = 'block';
+      const btn = document.getElementById('do-import-siswa-btn');
+      btn.disabled = validCount === 0;
+      btn.textContent = validCount > 0
+        ? `Import ${validCount} Siswa` + (errorCount > 0 ? ` (lewati ${errorCount})` : '')
+        : 'Tidak ada data valid';
+    } catch (err) {
+      showToast('Gagal membaca file: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function importSiswa() {
+  const validRows = bulkSiswaData.filter(r => r.ok);
+  if (validRows.length === 0) return;
+
+  const mode = document.querySelector('input[name="import-mode"]:checked')?.value || 'add';
+  const btn = document.getElementById('do-import-siswa-btn');
+  btn.disabled = true;
+  btn.textContent = 'Memproses...';
+
+  try {
+    if (mode === 'replace') {
+      // Delete all students in affected classes first
+      const affectedKelas = [...new Set(validRows.map(r => r.kelas))];
+      for (const kelas of affectedKelas) {
+        const snap = await db.collection('siswa').where('kelas', '==', kelas).get();
+        const CHUNK = 500;
+        for (let i = 0; i < snap.docs.length; i += CHUNK) {
+          const batch = db.batch();
+          snap.docs.slice(i, i + CHUNK).forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+    }
+
+    // Import in batches of 500
+    const CHUNK = 500;
+    for (let i = 0; i < validRows.length; i += CHUNK) {
+      const batch = db.batch();
+      validRows.slice(i, i + CHUNK).forEach(r => {
+        const ref = db.collection('siswa').doc(r.nomor);
+        batch.set(ref, {
+          no: r.no || 0, nomor: r.nomor, nisn: r.nisn, nama: r.nama, kelas: r.kelas,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        }, { merge: mode === 'add' });
+      });
+      await batch.commit();
+    }
+
+    invalidateSiswaCache();
+    closeModal('modal-import-siswa');
+    showToast(`${validRows.length} siswa berhasil diimpor ✓`, 'success');
+    await initSiswaTab();
+    if (currentSiswaKelas) loadSiswaList(currentSiswaKelas);
+  } catch (e) {
+    showToast('Import gagal: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = `Import ${validRows.length} Siswa`;
+  }
+}
+
+// ─── SETTINGS HELPERS ────────────────────────────────
+const SETTINGS_FALLBACK = { jumlahTugas: 6, jumlahUH: 7, adaUTS: true, bobotFormatif: 60, bobotSumatif: 40 };
+
+async function getMapelSettings(mapelId) {
+  if (settingsCache[mapelId]) return settingsCache[mapelId];
+  try {
+    const doc = await db.collection('settings').doc(mapelId).get();
+    if (doc.exists) { settingsCache[mapelId] = { ...SETTINGS_FALLBACK, ...doc.data() }; return settingsCache[mapelId]; }
+  } catch (_) {}
+  // Fall through to default
+  if (settingsCache['default']) return settingsCache['default'];
+  try {
+    const defDoc = await db.collection('settings').doc('default').get();
+    if (defDoc.exists) { settingsCache['default'] = { ...SETTINGS_FALLBACK, ...defDoc.data() }; return settingsCache['default']; }
+  } catch (_) {}
+  return { ...SETTINGS_FALLBACK };
+}
+
+function populateKelasSelect(selectId) {
+  getAllSiswa().then(all => {
+    const kelasList = [...new Set(all.map(s => s.kelas))].sort();
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Semua Kelas</option>';
+    kelasList.forEach(k => sel.innerHTML += `<option value="${k}">${k}</option>`);
+    if (prev) sel.value = prev;
+  });
+}
+
+async function loadSettingsTab() {
+  populateMapelSelect('settings-mapel-select');
+  // Load default settings
+  const def = await getMapelSettings('__none__'); // gets fallback or default doc
+  const defDoc = settingsCache['default'] || SETTINGS_FALLBACK;
+  document.getElementById('def-jumlah-tugas').value = defDoc.jumlahTugas;
+  document.getElementById('def-jumlah-uh').value = defDoc.jumlahUH;
+  document.getElementById('def-ada-uts').checked = defDoc.adaUTS;
+  document.getElementById('def-bobot-formatif').value = defDoc.bobotFormatif;
+  document.getElementById('def-bobot-formatif-label').textContent = defDoc.bobotFormatif;
+  document.getElementById('def-bobot-sumatif-label').textContent = defDoc.bobotSumatif;
+  // Load overrides list
+  renderMapelOverridesList();
+}
+
+async function renderMapelOverridesList() {
+  const listEl = document.getElementById('mapel-overrides-list');
+  listEl.innerHTML = '';
+  try {
+    const snap = await db.collection('settings').get();
+    const overrides = snap.docs.filter(d => d.id !== 'default');
+    if (overrides.length === 0) {
+      listEl.innerHTML = '<p style="font-size:12px;color:var(--text3);">Belum ada override per mapel.</p>';
+      return;
+    }
+    listEl.innerHTML = '<p style="font-size:12px;font-weight:600;margin-bottom:8px;">Override aktif:</p>';
+    overrides.forEach(d => {
+      const m = MAPEL_LIST.find(x => x.id === d.id);
+      const data = d.data();
+      const chip = document.createElement('span');
+      chip.className = 'badge badge-teal';
+      chip.style.cssText = 'margin:3px;font-size:11px;cursor:pointer;';
+      chip.title = `Tugas: ${data.jumlahTugas}, UH: ${data.jumlahUH}, UTS: ${data.adaUTS?'Ya':'Tidak'}, Bobot: ${data.bobotFormatif}/${data.bobotSumatif}`;
+      chip.textContent = `${m ? m.icon + ' ' + m.nama : d.id} ✕`;
+      chip.onclick = () => {
+        document.getElementById('settings-mapel-select').value = d.id;
+        loadMapelSettingsForm();
+      };
+      listEl.appendChild(chip);
+    });
+  } catch (_) {}
+}
+
+async function loadMapelSettingsForm() {
+  const mapelId = document.getElementById('settings-mapel-select').value;
+  const formEl = document.getElementById('mapel-settings-form');
+  if (!mapelId) { formEl.style.display = 'none'; return; }
+  formEl.style.display = 'block';
+
+  const defSettings = settingsCache['default'] || SETTINGS_FALLBACK;
+  document.getElementById('mapel-settings-default-info').textContent =
+    `Default global: ${defSettings.jumlahTugas} tugas, ${defSettings.jumlahUH} UH, UTS: ${defSettings.adaUTS?'Ya':'Tidak'}, Bobot ${defSettings.bobotFormatif}%/${defSettings.bobotSumatif}%`;
+
+  // Load mapel-specific settings if exists
+  try {
+    const doc = await db.collection('settings').doc(mapelId).get();
+    const data = doc.exists ? { ...SETTINGS_FALLBACK, ...doc.data() } : defSettings;
+    document.getElementById('mp-jumlah-tugas').value = data.jumlahTugas;
+    document.getElementById('mp-jumlah-uh').value = data.jumlahUH;
+    document.getElementById('mp-ada-uts').checked = data.adaUTS;
+    document.getElementById('mp-bobot-formatif').value = data.bobotFormatif;
+    document.getElementById('mp-bobot-formatif-label').textContent = data.bobotFormatif;
+    document.getElementById('mp-bobot-sumatif-label').textContent = data.bobotSumatif;
+  } catch (e) { showToast('Gagal memuat settings: ' + e.message, 'error'); }
+}
+
+async function saveDefaultSettings() {
+  const data = {
+    jumlahTugas: parseInt(document.getElementById('def-jumlah-tugas').value) || 6,
+    jumlahUH:    parseInt(document.getElementById('def-jumlah-uh').value) || 7,
+    adaUTS:      document.getElementById('def-ada-uts').checked,
+    bobotFormatif: parseInt(document.getElementById('def-bobot-formatif').value) || 60,
+    bobotSumatif:  100 - (parseInt(document.getElementById('def-bobot-formatif').value) || 60),
+    updatedBy: currentUser?.uid || '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    await db.collection('settings').doc('default').set(data);
+    settingsCache = {}; // invalidate all
+    showToast('Pengaturan default disimpan ✓', 'success');
+    renderMapelOverridesList();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function saveMapelSettings() {
+  const mapelId = document.getElementById('settings-mapel-select').value;
+  if (!mapelId) return;
+  const bobotF = parseInt(document.getElementById('mp-bobot-formatif').value) || 60;
+  const data = {
+    jumlahTugas: parseInt(document.getElementById('mp-jumlah-tugas').value) || 6,
+    jumlahUH:    parseInt(document.getElementById('mp-jumlah-uh').value) || 7,
+    adaUTS:      document.getElementById('mp-ada-uts').checked,
+    bobotFormatif: bobotF,
+    bobotSumatif: 100 - bobotF,
+    updatedBy: currentUser?.uid || '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    await db.collection('settings').doc(mapelId).set(data);
+    delete settingsCache[mapelId];
+    showToast('Pengaturan mapel disimpan ✓', 'success');
+    renderMapelOverridesList();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function resetMapelSettings() {
+  const mapelId = document.getElementById('settings-mapel-select').value;
+  if (!mapelId) return;
+  if (!confirm('Hapus override pengaturan mapel ini? Akan menggunakan setting default.')) return;
+  try {
+    await db.collection('settings').doc(mapelId).delete();
+    delete settingsCache[mapelId];
+    showToast('Override dihapus, kembali ke default ✓', 'success');
+    loadMapelSettingsForm();
+    renderMapelOverridesList();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+// Guru: settings modal for input nilai page
+async function showNilaiSettings() {
+  const mapelId = currentInputMapelId;
+  const mapel = MAPEL_LIST.find(m => m.id === mapelId);
+  document.getElementById('modal-settings-title').textContent = `⚙️ Pengaturan — ${mapel?.nama || mapelId}`;
+
+  const defSettings = await getMapelSettings('__none__'); // fallback
+  const actualDef = settingsCache['default'] || SETTINGS_FALLBACK;
+  document.getElementById('guru-settings-default-info').textContent =
+    `Default: ${actualDef.jumlahTugas} tugas, ${actualDef.jumlahUH} UH, UTS: ${actualDef.adaUTS?'Ya':'Tidak'}, Bobot ${actualDef.bobotFormatif}%/${actualDef.bobotSumatif}%`;
+
+  const cur = currentNilaiSettings || await getMapelSettings(mapelId);
+  document.getElementById('guru-mp-jumlah-tugas').value = cur.jumlahTugas;
+  document.getElementById('guru-mp-jumlah-uh').value = cur.jumlahUH;
+  document.getElementById('guru-mp-ada-uts').checked = cur.adaUTS;
+  document.getElementById('guru-mp-bobot-formatif').value = cur.bobotFormatif;
+  document.getElementById('guru-mp-bobot-formatif-label').textContent = cur.bobotFormatif;
+  document.getElementById('guru-mp-bobot-sumatif-label').textContent = cur.bobotSumatif;
+  openModal('modal-pengaturan-nilai');
+}
+
+async function saveGuruMapelSettings() {
+  const mapelId = currentInputMapelId;
+  const bobotF = parseInt(document.getElementById('guru-mp-bobot-formatif').value) || 60;
+  const data = {
+    jumlahTugas: parseInt(document.getElementById('guru-mp-jumlah-tugas').value) || 6,
+    jumlahUH:    parseInt(document.getElementById('guru-mp-jumlah-uh').value) || 7,
+    adaUTS:      document.getElementById('guru-mp-ada-uts').checked,
+    bobotFormatif: bobotF,
+    bobotSumatif: 100 - bobotF,
+    updatedBy: currentUser?.uid || '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    await db.collection('settings').doc(mapelId).set(data);
+    delete settingsCache[mapelId];
+    currentNilaiSettings = { ...data };
+    closeModal('modal-pengaturan-nilai');
+    showToast('Pengaturan disimpan, tabel diperbarui ✓', 'success');
+    loadInputNilaiTable();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function resetGuruMapelSettings() {
+  const mapelId = currentInputMapelId;
+  try {
+    await db.collection('settings').doc(mapelId).delete();
+    delete settingsCache[mapelId];
+    currentNilaiSettings = null;
+    closeModal('modal-pengaturan-nilai');
+    showToast('Kembali ke setting default ✓', 'success');
+    loadInputNilaiTable();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
 // ─── ADMIN: NILAI VIEW ────────────────────────────────
@@ -1614,10 +2414,14 @@ async function loadAdminNilai() {
   }
   container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
-    const snap = await db.collection('nilai').where('mapelId', '==', mapelId).get();
+    const [allSiswa, snap, settings] = await Promise.all([
+      getAllSiswa(),
+      db.collection('nilai').where('mapelId', '==', mapelId).get(),
+      getMapelSettings(mapelId),
+    ]);
     const nilaiMap = {};
     snap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
-    container.innerHTML = renderNilaiTable(mapelId, SISWA_DATA, nilaiMap, true);
+    container.innerHTML = renderNilaiTable(mapelId, allSiswa, nilaiMap, true, settings);
   } catch (e) {
     container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
   }
@@ -1632,14 +2436,14 @@ async function loadGuruMapelList() {
     return;
   }
   try {
+    const allSiswa = await getAllSiswa();
+    const total = allSiswa.length;
     container.innerHTML = '';
-    // Group by kelompok
     const myMapel = MAPEL_LIST.filter(m => currentGuruMapel.includes(m.id));
     for (const mapel of myMapel) {
       const snap = await db.collection('nilai').where('mapelId', '==', mapel.id).get();
       const done = new Set(snap.docs.map(d => d.data().nomorPeserta)).size;
-      const total = SISWA_DATA.length;
-      const pct = Math.round((done / total) * 100);
+      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
       const item = document.createElement('div');
       item.className = 'mapel-list-item';
       item.onclick = () => openInputNilai(mapel.id);
@@ -1649,11 +2453,11 @@ async function loadGuruMapelList() {
           <div style="font-size:13px;font-weight:700;">${mapel.nama}</div>
           <div style="font-size:11px;color:var(--text3);">Kel. ${mapel.kelompok} · ${done}/${total} siswa selesai</div>
           <div class="progress-bar" style="margin-top:5px;">
-            <div class="progress-fill ${done===total?'':''}\" style="width:${pct}%;${done===total?'background:var(--green);':''}"></div>
+            <div class="progress-fill" style="width:${pct}%;${done===total&&total>0?'background:var(--green);':''}"></div>
           </div>
         </div>
-        <div style="font-size:18px;color:${done===total?'var(--green)':'var(--text3)'}">
-          ${done===total?'✅':'›'}
+        <div style="font-size:18px;color:${done===total&&total>0?'var(--green)':'var(--text3)'}">
+          ${done===total&&total>0?'✅':'›'}
         </div>`;
       container.appendChild(item);
     }
@@ -1665,13 +2469,15 @@ async function loadGuruMapelList() {
 // ─── INPUT NILAI ──────────────────────────────────────
 async function openInputNilai(mapelId) {
   currentInputMapelId = mapelId;
-  currentInputKelas = 'XII-1';
+  currentNilaiSettings = null; // reset, will be loaded fresh
   const mapel = MAPEL_LIST.find(m => m.id === mapelId);
   document.getElementById('input-mapel-title').textContent = `${mapel.icon} ${mapel.nama}`;
 
-  // Build kelas tabs
+  // Build kelas tabs from Firestore
+  const kelasList = await getUniqueKelas();
+  currentInputKelas = kelasList[0] || 'XII-1';
   const klassesTabs = document.getElementById('kelas-tabs-input');
-  klassesTabs.innerHTML = ['XII-1', 'XII-2'].map(k =>
+  klassesTabs.innerHTML = kelasList.map(k =>
     `<button class="btn ${k===currentInputKelas?'btn-primary':'btn-ghost'} btn-sm" onclick="switchInputKelas('${k}')">${k}</button>`
   ).join('');
 
@@ -1693,89 +2499,68 @@ async function loadInputNilaiTable() {
   container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   document.getElementById('input-kelas-title').textContent = `Kelas ${currentInputKelas}`;
 
-  const siswa = SISWA_DATA.filter(s => s.kelas === currentInputKelas);
   try {
-    // Load existing nilai
-    const snap = await db.collection('nilai')
-      .where('mapelId', '==', currentInputMapelId)
-      .where('kelas', '==', currentInputKelas)
-      .get();
+    const [siswa, snap, settings] = await Promise.all([
+      getSiswaByKelas(currentInputKelas),
+      db.collection('nilai').where('mapelId', '==', currentInputMapelId).where('kelas', '==', currentInputKelas).get(),
+      getMapelSettings(currentInputMapelId),
+    ]);
+    currentNilaiSettings = settings;
     const nilaiMap = {};
     snap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
-    container.innerHTML = renderNilaiTable(currentInputMapelId, siswa, nilaiMap, false);
+    container.innerHTML = renderNilaiTable(currentInputMapelId, siswa, nilaiMap, false, settings);
   } catch (e) {
     container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
   }
 }
 
-function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly) {
-  const headers = [
-    { label: 'Tugas 1', key: 'f1', group: 'formatif' },
-    { label: 'Tugas 2', key: 'f2', group: 'formatif' },
-    { label: 'Tugas 3', key: 'f3', group: 'formatif' },
-    { label: 'Tugas 4', key: 'f4', group: 'formatif' },
-    { label: 'Tugas 5', key: 'f5', group: 'formatif' },
-    { label: 'Tugas 6', key: 'f6', group: 'formatif' },
-    { label: 'UH 1', key: 'uh1', group: 'sumatif' },
-    { label: 'UH 2', key: 'uh2', group: 'sumatif' },
-    { label: 'UH 3', key: 'uh3', group: 'sumatif' },
-    { label: 'UH 4', key: 'uh4', group: 'sumatif' },
-    { label: 'UH 5', key: 'uh5', group: 'sumatif' },
-    { label: 'UH 6', key: 'uh6', group: 'sumatif' },
-    { label: 'UH 7', key: 'uh7', group: 'sumatif' },
-    { label: 'UTS', key: 'uts', group: 'sumatif' },
-  ];
+function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
+  const s = settings || SETTINGS_FALLBACK;
+  const fKeys = Array.from({length: s.jumlahTugas}, (_, i) => `f${i+1}`);
+  const uhKeys = Array.from({length: s.jumlahUH}, (_, i) => `uh${i+1}`);
+  const sumatifKeys = s.adaUTS ? [...uhKeys, 'uts'] : uhKeys;
+  const sumatifSpan = sumatifKeys.length;
+  const formatifSpan = fKeys.length;
 
   let html = `<div class="nilai-table-wrap"><table class="nilai-table">
     <thead>
       <tr>
         <th class="sticky-col" rowspan="2">Nama Siswa</th>
-        <th colspan="7" class="group-header">NILAI FORMATIF (Bobot 50%)</th>
-        <th colspan="7" class="group-header">NILAI SUMATIF (Bobot 50%)</th>
+        <th colspan="${formatifSpan}" class="group-header">NILAI FORMATIF (Bobot ${s.bobotFormatif}%)</th>
+        <th colspan="${sumatifSpan}" class="group-header">NILAI SUMATIF (Bobot ${s.bobotSumatif}%)</th>
         <th rowspan="2" style="background:var(--teal);">Nilai<br>Rapor</th>
         <th rowspan="2" style="background:#92400e;">Nilai<br>Ijazah</th>
       </tr>
       <tr>`;
+  fKeys.forEach((_, i) => html += `<th>Tugas ${i+1}</th>`);
+  uhKeys.forEach((_, i) => html += `<th>UH ${i+1}</th>`);
+  if (s.adaUTS) html += `<th>UTS</th>`;
+  html += `</tr></thead><tbody>`;
 
-  html += headers.map(h =>
-    `<th>${h.label}</th>`
-  ).join('');
-  html += `</tr>
-      <tr>
-        <th class="sticky-col" style="background:#1e3a5f;font-size:10px;">Bobot ↓</th>`;
-  html += headers.map(() => `<th style="background:#1e3a5f;font-size:10px;">50</th>`).join('');
-  html += `<th style="background:#1e3a5f;"></th><th style="background:#1e3a5f;"></th></tr>
-    </thead>
-    <tbody>`;
-
-  siswaList.forEach((s, idx) => {
-    const n = nilaiMap[s.nomor] || {};
-    const fVals = [n.f1,n.f2,n.f3,n.f4,n.f5,n.f6].map(v => v ?? '');
-    const uhVals = [n.uh1,n.uh2,n.uh3,n.uh4,n.uh5,n.uh6,n.uh7].map(v => v ?? '');
-    const utsVal = n.uts ?? '';
+  siswaList.forEach(sw => {
+    const n = nilaiMap[sw.nomor] || {};
     const rapor = n.nilaiRapor != null ? n.nilaiRapor.toFixed(2) : '-';
     const ijazah = n.nilaiIjazah != null ? n.nilaiIjazah.toFixed(2) : '-';
 
-    html += `<tr>
-      <td class="sticky-col" title="${s.nama}">${s.nama}</td>`;
+    html += `<tr><td class="sticky-col" title="${sw.nama}">${sw.nama}</td>`;
 
     if (readOnly) {
-      fVals.forEach(v => html += `<td>${v !== '' ? v : '-'}</td>`);
-      uhVals.forEach(v => html += `<td>${v !== '' ? v : '-'}</td>`);
-      html += `<td>${utsVal !== '' ? utsVal : '-'}</td>`;
+      fKeys.forEach(k => html += `<td>${n[k] != null ? n[k] : '-'}</td>`);
+      uhKeys.forEach(k => html += `<td>${n[k] != null ? n[k] : '-'}</td>`);
+      if (s.adaUTS) html += `<td>${n.uts != null ? n.uts : '-'}</td>`;
     } else {
-      const allKeys = ['f1','f2','f3','f4','f5','f6','uh1','uh2','uh3','uh4','uh5','uh6','uh7','uts'];
+      const allKeys = [...fKeys, ...sumatifKeys];
       allKeys.forEach(key => {
         const val = n[key] ?? '';
-        html += `<td><input type="number" min="0" max="100" step="0.01" 
-          id="inp_${s.nomor}_${key}" value="${val}"
-          oninput="computeNilai('${s.nomor}')"
+        html += `<td><input type="number" min="0" max="100" step="0.01"
+          id="inp_${sw.nomor}_${key}" value="${val}"
+          oninput="computeNilai('${sw.nomor}')"
           onblur="this.value=this.value?parseFloat(this.value).toFixed(0):''"></td>`;
       });
     }
 
-    html += `<td><span class="nilai-computed rapor" id="rap_${s.nomor}">${rapor}</span></td>`;
-    html += `<td><span class="nilai-computed ijazah" id="ija_${s.nomor}">${ijazah}</span></td>`;
+    html += `<td><span class="nilai-computed rapor" id="rap_${sw.nomor}">${rapor}</span></td>`;
+    html += `<td><span class="nilai-computed ijazah" id="ija_${sw.nomor}">${ijazah}</span></td>`;
     html += `</tr>`;
   });
 
@@ -1784,98 +2569,84 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly) {
 }
 
 function computeNilai(nomor) {
-  const keys = ['f1','f2','f3','f4','f5','f6'];
-  const uhKeys = ['uh1','uh2','uh3','uh4','uh5','uh6','uh7','uts'];
+  const s = currentNilaiSettings || SETTINGS_FALLBACK;
+  const fKeys = Array.from({length: s.jumlahTugas}, (_, i) => `f${i+1}`);
+  const uhKeys = Array.from({length: s.jumlahUH}, (_, i) => `uh${i+1}`);
+  const sumatifKeys = s.adaUTS ? [...uhKeys, 'uts'] : uhKeys;
 
-  const fVals = keys.map(k => {
+  const fVals = fKeys.map(k => {
     const el = document.getElementById(`inp_${nomor}_${k}`);
     return el && el.value !== '' ? parseFloat(el.value) : null;
   }).filter(v => v !== null);
 
-  const sVals = uhKeys.map(k => {
+  const sVals = sumatifKeys.map(k => {
     const el = document.getElementById(`inp_${nomor}_${k}`);
     return el && el.value !== '' ? parseFloat(el.value) : null;
   }).filter(v => v !== null);
 
-  let rapor = null, ijazah = null;
-  if (fVals.length > 0 || sVals.length > 0) {
-    // A = avg formatif (bobot 50% dari 100, so A = avg/100 * 50 * 2 = avg... simplified)
-    // Sesuai sheet: A = avg(f1..f6), B = avg(uh1..uh7, uts weighted)
-    // Nilai Rapor = (A*bobot_A + B*bobot_B) / (bobot_A + bobot_B)
-    // From Excel: bobot formatif=6, bobot sumatif=7+1=8, but each value has weight 50
-    // Simplified: Nilai Rapor = avg(all values) with 50/50 weighting between formatif and sumatif groups
-    const A = fVals.length > 0 ? fVals.reduce((a,b)=>a+b,0)/fVals.length : 0;
-    const B = sVals.length > 0 ? sVals.reduce((a,b)=>a+b,0)/sVals.length : 0;
+  const A = fVals.length > 0 ? fVals.reduce((a,b)=>a+b,0)/fVals.length : null;
+  const B = sVals.length > 0 ? sVals.reduce((a,b)=>a+b,0)/sVals.length : null;
 
-    // Weight A and B equally (matching 60/40 split from Excel... use 60:40)
-    const hasA = fVals.length > 0, hasB = sVals.length > 0;
-    if (hasA && hasB) rapor = A * 0.6 + B * 0.4;
-    else if (hasA) rapor = A;
-    else rapor = B;
-
-    // Nilai Ijazah = (Nilai Rapor * 40 + UM*60) / 100 — UM not inputted here, show partial
-    ijazah = rapor; // will be updated when UM added
-  }
+  let rapor = null;
+  if (A !== null && B !== null) rapor = (A * s.bobotFormatif + B * s.bobotSumatif) / 100;
+  else if (A !== null) rapor = A;
+  else if (B !== null) rapor = B;
 
   const rapEl = document.getElementById(`rap_${nomor}`);
   const ijaEl = document.getElementById(`ija_${nomor}`);
   if (rapEl) rapEl.textContent = rapor !== null ? rapor.toFixed(2) : '-';
-  if (ijaEl) ijaEl.textContent = ijazah !== null ? ijazah.toFixed(2) : '-';
+  if (ijaEl) ijaEl.textContent = rapor !== null ? rapor.toFixed(2) : '-';
 }
 
 async function saveAllNilai() {
   const btn = document.getElementById('save-nilai-btn');
   btn.textContent = '⏳ Menyimpan...'; btn.disabled = true;
 
-  const siswa = SISWA_DATA.filter(s => s.kelas === currentInputKelas);
-  const batch = db.batch();
-  let count = 0;
+  const s = currentNilaiSettings || SETTINGS_FALLBACK;
+  const fKeys = Array.from({length: s.jumlahTugas}, (_, i) => `f${i+1}`);
+  const uhKeys = Array.from({length: s.jumlahUH}, (_, i) => `uh${i+1}`);
+  const sumatifKeys = s.adaUTS ? [...uhKeys, 'uts'] : uhKeys;
+  const allKeys = [...fKeys, ...sumatifKeys];
+  const settingsSnapshot = { jumlahTugas: s.jumlahTugas, jumlahUH: s.jumlahUH, adaUTS: s.adaUTS, bobotFormatif: s.bobotFormatif, bobotSumatif: s.bobotSumatif };
 
-  siswa.forEach(s => {
-    const keys = ['f1','f2','f3','f4','f5','f6','uh1','uh2','uh3','uh4','uh5','uh6','uh7','uts'];
-    const data = {
-      mapelId: currentInputMapelId,
-      nomorPeserta: s.nomor,
-      nisn: s.nisn,
-      nama: s.nama,
-      kelas: s.kelas,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    };
-    let hasData = false;
-    keys.forEach(k => {
-      const el = document.getElementById(`inp_${s.nomor}_${k}`);
-      if (el && el.value !== '') {
-        data[k] = parseFloat(el.value);
-        hasData = true;
-      } else {
-        data[k] = null;
+  try {
+    const siswa = await getSiswaByKelas(currentInputKelas);
+    const batch = db.batch();
+    let count = 0;
+
+    siswa.forEach(sw => {
+      const data = {
+        mapelId: currentInputMapelId, nomorPeserta: sw.nomor,
+        nisn: sw.nisn, nama: sw.nama, kelas: sw.kelas,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        settingsSnapshot,
+      };
+      let hasData = false;
+      allKeys.forEach(k => {
+        const el = document.getElementById(`inp_${sw.nomor}_${k}`);
+        if (el && el.value !== '') { data[k] = parseFloat(el.value); hasData = true; }
+        else data[k] = null;
+      });
+
+      const fVals = fKeys.map(k => data[k]).filter(v => v !== null);
+      const sVals = sumatifKeys.map(k => data[k]).filter(v => v !== null);
+      const A = fVals.length > 0 ? fVals.reduce((a,b)=>a+b,0)/fVals.length : null;
+      const B = sVals.length > 0 ? sVals.reduce((a,b)=>a+b,0)/sVals.length : null;
+
+      if (A !== null && B !== null) data.nilaiRapor = (A * s.bobotFormatif + B * s.bobotSumatif) / 100;
+      else if (A !== null) data.nilaiRapor = A;
+      else if (B !== null) data.nilaiRapor = B;
+      else data.nilaiRapor = null;
+      data.nilaiIjazah = data.nilaiRapor;
+      data.nilaiA = A;
+      data.nilaiB = B;
+
+      if (hasData) {
+        batch.set(db.collection('nilai').doc(`${currentInputMapelId}_${sw.nomor}`), data, { merge: true });
+        count++;
       }
     });
 
-    // Compute rapor
-    const fVals = ['f1','f2','f3','f4','f5','f6'].map(k => data[k]).filter(v => v !== null);
-    const sVals = ['uh1','uh2','uh3','uh4','uh5','uh6','uh7','uts'].map(k => data[k]).filter(v => v !== null);
-    const A = fVals.length > 0 ? fVals.reduce((a,b)=>a+b,0)/fVals.length : null;
-    const B = sVals.length > 0 ? sVals.reduce((a,b)=>a+b,0)/sVals.length : null;
-
-    if (A !== null && B !== null) data.nilaiRapor = A * 0.6 + B * 0.4;
-    else if (A !== null) data.nilaiRapor = A;
-    else if (B !== null) data.nilaiRapor = B;
-    else data.nilaiRapor = null;
-
-    data.nilaiIjazah = data.nilaiRapor; // Nilai Ijazah = sama dulu, UM bisa ditambah nanti
-    data.nilaiA = A;
-    data.nilaiB = B;
-
-    if (hasData) {
-      const docId = `${currentInputMapelId}_${s.nomor}`;
-      const ref = db.collection('nilai').doc(docId);
-      batch.set(ref, data, { merge: true });
-      count++;
-    }
-  });
-
-  try {
     await batch.commit();
     showToast(`${count} nilai berhasil disimpan ✓`, 'success');
     loadGuruMapelList();
@@ -1899,68 +2670,71 @@ async function exportExcel() {
   const mapel = MAPEL_LIST.find(m => m.id === mapelId);
   showToast('Menyiapkan export...', '');
 
-  const siswaFilter = kelas ? SISWA_DATA.filter(s => s.kelas === kelas) : SISWA_DATA;
-
-  const snap = await db.collection('nilai').where('mapelId', '==', mapelId).get();
-  const nilaiMap = {};
-  snap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
-
-  // Build worksheet
-  const rows = [];
-  // Title
-  rows.push(['DAFTAR NILAI RAPOR DAN UJIAN MADRASAH 2025/2026']);
-  rows.push([]);
-  rows.push(['No', 'Nomor Peserta', 'NISN', 'Nama Siswa',
-    'Tugas 1', 'Tugas 2', 'Tugas 3', 'Tugas 4', 'Tugas 5', 'Tugas 6',
-    'Nilai A (Formatif)',
-    'UH 1', 'UH 2', 'UH 3', 'UH 4', 'UH 5', 'UH 6', 'UH 7', 'UTS',
-    'Nilai B (Sumatif)',
-    'NILAI RAPOR', 'NILAI IJAZAH', 'PERINGKAT'
-  ]);
-
-  // Sort by class then no
-  const sorted = [...siswaFilter].sort((a,b) => {
-    if (a.kelas !== b.kelas) return a.kelas.localeCompare(b.kelas);
-    return a.no - b.no;
-  });
-
-  sorted.forEach((s, idx) => {
-    const n = nilaiMap[s.nomor] || {};
-    rows.push([
-      idx + 1,
-      s.nomor, s.nisn, s.nama,
-      n.f1 ?? '', n.f2 ?? '', n.f3 ?? '', n.f4 ?? '', n.f5 ?? '', n.f6 ?? '',
-      n.nilaiA != null ? +n.nilaiA.toFixed(2) : '',
-      n.uh1 ?? '', n.uh2 ?? '', n.uh3 ?? '', n.uh4 ?? '', n.uh5 ?? '', n.uh6 ?? '', n.uh7 ?? '', n.uts ?? '',
-      n.nilaiB != null ? +n.nilaiB.toFixed(2) : '',
-      n.nilaiRapor != null ? +n.nilaiRapor.toFixed(2) : '',
-      n.nilaiIjazah != null ? +n.nilaiIjazah.toFixed(2) : '',
-      '' // peringkat kosong, bisa dihitung manual di Excel
+  try {
+    const [allSiswa, snap, settings] = await Promise.all([
+      getAllSiswa(),
+      db.collection('nilai').where('mapelId', '==', mapelId).get(),
+      getMapelSettings(mapelId),
     ]);
-  });
+    const s = settings;
+    const fKeys = Array.from({length: s.jumlahTugas}, (_, i) => `f${i+1}`);
+    const uhKeys = Array.from({length: s.jumlahUH}, (_, i) => `uh${i+1}`);
 
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  // Style: merge title
-  ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:22} }];
-  ws['!cols'] = [
-    {wch:4},{wch:24},{wch:12},{wch:28},
-    {wch:7},{wch:7},{wch:7},{wch:7},{wch:7},{wch:7},{wch:12},
-    {wch:7},{wch:7},{wch:7},{wch:7},{wch:7},{wch:7},{wch:7},{wch:7},{wch:12},
-    {wch:12},{wch:12},{wch:10}
-  ];
+    const nilaiMap = {};
+    snap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, mapel.nama.substring(0,30));
+    const siswaFilter = kelas ? allSiswa.filter(sw => sw.kelas === kelas) : allSiswa;
+    const sorted = [...siswaFilter].sort((a,b) => a.kelas !== b.kelas ? a.kelas.localeCompare(b.kelas) : a.no - b.no);
 
-  const filename = `Nilai_${mapel.nama.replace(/[^a-zA-Z0-9]/g,'_')}${kelas?'_'+kelas:''}_2025-2026.xlsx`;
-  XLSX.writeFile(wb, filename);
-  showToast('File Excel berhasil didownload ✓', 'success');
+    const rows = [];
+    rows.push([`DAFTAR NILAI RAPOR DAN UJIAN MADRASAH 2025/2026`]);
+    rows.push([]);
+
+    const header = ['No', 'Nomor Peserta', 'NISN', 'Nama Siswa'];
+    fKeys.forEach((_, i) => header.push(`Tugas ${i+1}`));
+    header.push(`Nilai A (Formatif ${s.bobotFormatif}%)`);
+    uhKeys.forEach((_, i) => header.push(`UH ${i+1}`));
+    if (s.adaUTS) header.push('UTS');
+    header.push(`Nilai B (Sumatif ${s.bobotSumatif}%)`, 'NILAI RAPOR', 'NILAI IJAZAH', 'PERINGKAT');
+    rows.push(header);
+
+    sorted.forEach((sw, idx) => {
+      const n = nilaiMap[sw.nomor] || {};
+      const row = [idx+1, sw.nomor, sw.nisn, sw.nama];
+      fKeys.forEach(k => row.push(n[k] ?? ''));
+      row.push(n.nilaiA != null ? +n.nilaiA.toFixed(2) : '');
+      uhKeys.forEach(k => row.push(n[k] ?? ''));
+      if (s.adaUTS) row.push(n.uts ?? '');
+      row.push(n.nilaiB != null ? +n.nilaiB.toFixed(2) : '');
+      row.push(n.nilaiRapor != null ? +n.nilaiRapor.toFixed(2) : '');
+      row.push(n.nilaiIjazah != null ? +n.nilaiIjazah.toFixed(2) : '');
+      row.push('');
+      rows.push(row);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:header.length-1} }];
+    ws['!cols'] = [{wch:4},{wch:24},{wch:12},{wch:28},
+      ...fKeys.map(()=>({wch:7})), {wch:16},
+      ...uhKeys.map(()=>({wch:7})),
+      ...(s.adaUTS ? [{wch:7}] : []),
+      {wch:16},{wch:12},{wch:12},{wch:10}
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, mapel.nama.substring(0,30));
+    const filename = `Nilai_${mapel.nama.replace(/[^a-zA-Z0-9]/g,'_')}${kelas?'_'+kelas:''}_2025-2026.xlsx`;
+    XLSX.writeFile(wb, filename);
+    showToast('File Excel berhasil didownload ✓', 'success');
+  } catch (e) {
+    showToast('Export gagal: ' + e.message, 'error');
+  }
 }
 
 async function exportGabungan(type) {
   showToast('Menyiapkan data gabungan...', '');
   try {
-    const snap = await db.collection('nilai').get();
+    const [allSiswa, snap] = await Promise.all([getAllSiswa(), db.collection('nilai').get()]);
     const nilaiAll = {};
     snap.docs.forEach(d => {
       const data = d.data();
@@ -1978,7 +2752,7 @@ async function exportGabungan(type) {
     header.push('TOTAL', 'RATA-RATA');
     rows.push(header);
 
-    SISWA_DATA.forEach((s, idx) => {
+    allSiswa.forEach((s, idx) => {
       const row = [idx+1, s.nomor, s.nisn, s.nama, s.kelas];
       let total = 0, count = 0;
       MAPEL_LIST.forEach(m => {
@@ -1992,7 +2766,7 @@ async function exportGabungan(type) {
     });
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:MAPEL_LIST.length+6} }];
+    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:header.length-1} }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, isRapor ? 'GABUNGAN RAPOR' : 'GABUNGAN IJAZAH');
     XLSX.writeFile(wb, `Gabungan_${isRapor?'Rapor':'Ijazah'}_2025-2026.xlsx`);

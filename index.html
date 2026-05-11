@@ -1162,7 +1162,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
     <div id="kelas-tabs-input" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"></div>
     <!-- Deskripsi Materi (1 field per mapel, berlaku semua kelas) -->
     <div class="card card-body" style="margin-bottom:12px;padding:10px 12px;">
-      <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:6px;">📝 Deskripsi Materi / Bab yang Dibahas <span style="font-weight:400;color:var(--text3);">(berlaku untuk semua kelas)</span></label>
+      <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:6px;">📝 Deskripsi Materi / Bab yang Dibahas <span style="font-weight:400;color:var(--text3);">(spesifik per kelas ini)</span></label>
       <textarea id="input-deskripsi-mapel" rows="2"
         placeholder="Contoh: Bab 1 Qur'an Hadis, Bab 2 Hukum Bacaan, Bab 3 Asmaul Husna..."
         style="width:100%;font-size:12px;padding:8px;border:1.5px solid var(--border);border-radius:8px;resize:vertical;font-family:inherit;"></textarea>
@@ -3091,9 +3091,12 @@ async function loadInputNilaiTable() {
     currentNilaiSettings = settings;
     const nilaiMap = {};
     snap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
-    // Refresh deskripsi dari settings per kelas (overrides nilai sebelumnya saat ganti kelas)
+    // Deskripsi hanya dari exact kelas settings, tidak ikut fallback level lain
     const deskripsiEl = document.getElementById('input-deskripsi-mapel');
-    if (deskripsiEl && settings.deskripsi !== undefined) deskripsiEl.value = settings.deskripsi || '';
+    if (deskripsiEl) {
+      const exactKey = `${currentInputMapelId}_${currentInputKelas}`;
+      deskripsiEl.value = settingsCache[exactKey]?.deskripsi || '';
+    }
     const deskripsiInput = deskripsiEl?.value || '';
     container.innerHTML = renderNilaiTable(currentInputMapelId, siswa, nilaiMap, false, settings, deskripsiInput);
   } catch (e) {

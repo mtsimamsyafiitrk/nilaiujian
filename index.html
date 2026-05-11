@@ -760,6 +760,49 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
   font-size: 12px;
 }
 
+/* ─── SISWA SUB-TABS ─── */
+.siswa-subtab-btn {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text3);
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2.5px solid transparent;
+  white-space: nowrap;
+  font-family: inherit;
+  transition: all .2s;
+}
+.siswa-subtab-btn.active { color: var(--teal); border-bottom-color: var(--teal); }
+#tab-siswa.active { display: flex !important; flex-direction: column; overflow: hidden; }
+
+/* ─── ROMBEL CARDS ─── */
+.rombel-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+}
+
+/* ─── MIGRASI PROGRESS ─── */
+.migrasi-log {
+  font-size: 12px;
+  color: var(--text2);
+  font-family: 'JetBrains Mono', monospace;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
 /* ─── RESPONSIVE ─── */
 @media (min-width: 640px) {
   .stats-grid { grid-template-columns: repeat(4, 1fr); }
@@ -869,31 +912,55 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
   </div>
 
   <!-- TAB: SISWA -->
-  <div id="tab-siswa" class="tab-content content">
-    <div class="section-header" style="margin-bottom:10px;">
-      <h3>Data Siswa</h3>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="btn btn-outline btn-sm" onclick="downloadTemplateSiswa()" title="Download template Excel">📄 Template</button>
-        <button class="btn btn-outline btn-sm" onclick="showImportSiswa()">📂 Import</button>
-        <button class="btn btn-primary btn-sm" onclick="showAddSiswa()">+ Tambah</button>
+  <div id="tab-siswa" class="tab-content">
+    <div style="display:flex;background:white;border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0;">
+      <button id="siswa-subtab-btn-siswa" class="siswa-subtab-btn active" onclick="switchSiswaSubTab('siswa')">👥 Siswa</button>
+      <button id="siswa-subtab-btn-rombel" class="siswa-subtab-btn" onclick="switchSiswaSubTab('rombel')">🏫 Rombel</button>
+    </div>
+
+    <!-- Sub-tab: Siswa -->
+    <div id="siswa-sub-siswa" style="flex:1;overflow-y:auto;padding:16px;">
+      <div class="section-header" style="margin-bottom:10px;">
+        <h3>Data Siswa</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="downloadTemplateSiswa()" title="Download template Excel">📄 Template</button>
+          <button class="btn btn-outline btn-sm" onclick="showImportSiswa()">📂 Import</button>
+          <button class="btn btn-primary btn-sm" onclick="showAddSiswa()">+ Tambah</button>
+        </div>
+      </div>
+      <div id="siswa-delete-bar" style="display:none;margin-bottom:8px;gap:6px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-danger btn-sm" id="btn-hapus-terpilih" onclick="deleteSelectedSiswa()">🗑️ Hapus Terpilih (0)</button>
+        <button class="btn btn-outline btn-sm" onclick="showPindahRombel()">🏫 Pindah Rombel</button>
+      </div>
+      <div id="siswa-kelas-tabs" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+        <div class="loading" style="font-size:12px;"><div class="spinner" style="width:14px;height:14px;border-width:2px;"></div></div>
+      </div>
+      <div class="card" id="siswa-list-card">
+        <div class="loading"><div class="spinner"></div></div>
       </div>
     </div>
-    <div id="siswa-delete-bar" style="display:none;margin-bottom:8px;">
-      <button class="btn btn-danger btn-sm" id="btn-hapus-terpilih" onclick="deleteSelectedSiswa()">🗑️ Hapus Terpilih (0)</button>
-    </div>
-    <div id="siswa-kelas-tabs" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
-      <div class="loading" style="font-size:12px;"><div class="spinner" style="width:14px;height:14px;border-width:2px;"></div></div>
-    </div>
-    <div class="card" id="siswa-list-card">
-      <div class="loading"><div class="spinner"></div></div>
+
+    <!-- Sub-tab: Rombel -->
+    <div id="siswa-sub-rombel" style="display:none;flex:1;overflow-y:auto;padding:16px;">
+      <div class="section-header" style="margin-bottom:12px;">
+        <h3>🏫 Rombongan Belajar</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-danger btn-sm" id="btn-fix-kelas" onclick="fixNamaKelas()" style="display:none;">🔧 Fix Nama Kelas (XII → IX)</button>
+          <button class="btn btn-primary btn-sm" onclick="showTambahRombel()">+ Tambah Rombel</button>
+        </div>
+      </div>
+      <div id="rombel-list-container">
+        <div class="loading"><div class="spinner"></div>Memuat rombel...</div>
+      </div>
     </div>
   </div>
 
   <div id="tab-mapel" class="tab-content content">
     <div class="section-header">
       <h3>Mata Pelajaran</h3>
-      <div style="display:flex;gap:6px;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" id="seed-mapel-btn" style="display:none;" onclick="seedMapelData()">🌱 Seed Data Mapel</button>
+        <button class="btn btn-gold btn-sm" id="migrasi-guru-btn" style="display:none;" onclick="migrasiDataGuru()">🔄 Migrasi Data Guru Lama</button>
         <button class="btn btn-primary btn-sm" onclick="showAddMapel()">+ Tambah Mapel</button>
       </div>
     </div>
@@ -1378,6 +1445,30 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
   </div>
 </div>
 
+<!-- Pindah Rombel Modal -->
+<div id="modal-pindah-rombel" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3>🏫 Pindah Rombel</h3>
+      <button class="modal-close" onclick="closeModal('modal-pindah-rombel')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;" id="pindah-rombel-info">Pindahkan siswa ke rombel:</p>
+      <div class="form-group">
+        <label>Pilih Rombel Tujuan</label>
+        <select id="pindah-rombel-select">
+          <option value="">-- Pilih Rombel --</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-pindah-rombel')">Batal</button>
+      <button class="btn btn-primary" style="flex:2" onclick="doPindahRombel()">✅ Pindahkan</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast Container -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -1458,6 +1549,7 @@ let bulkSiswaData = [];
 // Settings
 let settingsCache = {};      // keyed by mapelId or 'default'
 let mapelCache = null;       // null = not loaded yet; array when loaded
+let rombelCache = null;      // null = not loaded yet; array when loaded
 let currentNilaiSettings = null;
 
 // ─── FIREBASE CONFIG (HARDCODED) ─────────────────────
@@ -1505,7 +1597,7 @@ function switchTab(tab) {
   if (el) el.classList.add('active');
 
   if (tab === 'guru') loadGuruList();
-  if (tab === 'siswa') initSiswaTab();
+  if (tab === 'siswa') { initSiswaTab(); switchSiswaSubTab('siswa'); }
   if (tab === 'mapel') loadMapelTab();
   if (tab === 'dashboard') loadAdminDashboard();
   if (tab === 'nilai') populateMapelSelect('admin-mapel-select');
@@ -2138,7 +2230,7 @@ function updateDeleteSelectedBtn() {
   const bar = document.getElementById('siswa-delete-bar');
   const btn = document.getElementById('btn-hapus-terpilih');
   const n = selectedSiswaIds.size;
-  bar.style.display = n > 0 ? 'block' : 'none';
+  bar.style.display = n > 0 ? 'flex' : 'none';
   if (btn) btn.textContent = `🗑️ Hapus Terpilih (${n})`;
 }
 
@@ -2258,7 +2350,7 @@ function parseSiswaFile(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -2280,6 +2372,14 @@ function parseSiswaFile(input) {
       const colKelas  = getCol('kelas');
       const colNo     = getCol('no', 'no.');
 
+      // Load existing rombel names for validation
+      const rombelNames = new Set();
+      try {
+        const rombelSnap = await db.collection('rombel').get();
+        rombelSnap.docs.forEach(d => rombelNames.add(d.id));
+        if (siswaCache) siswaCache.forEach(s => rombelNames.add(s.kelas));
+      } catch (_) {}
+
       bulkSiswaData = [];
       const tbody = document.getElementById('import-siswa-tbody');
       tbody.innerHTML = '';
@@ -2296,6 +2396,7 @@ function parseSiswaFile(input) {
         const nomor = colNomor >= 0 ? String(row[colNomor] || '').trim() : '';
         const kelas = colKelas >= 0 ? String(row[colKelas] || '').trim() : '';
         const no = colNo >= 0 ? parseInt(row[colNo]) || 0 : 0;
+        const isNewRombel = kelas && rombelNames.size > 0 && !rombelNames.has(kelas);
 
         const errors = [];
         if (!nama) errors.push('Nama kosong');
@@ -2305,11 +2406,11 @@ function parseSiswaFile(input) {
 
         const isOk = errors.length === 0;
         if (!isOk) errorCount++;
-        bulkSiswaData.push({ no, nama, nisn, nomor, kelas, errors, ok: isOk });
+        bulkSiswaData.push({ no, nama, nisn, nomor, kelas, errors, ok: isOk, isNewRombel });
 
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid var(--border)';
-        tr.style.background = isOk ? '' : '#fef2f2';
+        tr.style.background = isOk ? (isNewRombel ? '#fffbeb' : '') : '#fef2f2';
         tr.innerHTML = `
           <td style="padding:4px 8px;color:var(--text3);">${i}</td>
           <td style="padding:4px 8px;">${nama||'—'}</td>
@@ -2317,7 +2418,9 @@ function parseSiswaFile(input) {
           <td style="padding:4px 8px;font-family:monospace;font-size:10px;">${nomor||'—'}</td>
           <td style="padding:4px 8px;">${kelas||'—'}</td>
           <td style="padding:4px 8px;">${isOk
-            ? '<span style="color:#16a34a;font-weight:600;">✓</span>'
+            ? (isNewRombel
+                ? '<span style="color:#d97706;font-weight:600;" title="Rombel belum ada, akan dibuat otomatis">⚠️ Rombel baru</span>'
+                : '<span style="color:#16a34a;font-weight:600;">✓</span>')
             : `<span style="color:#ef4444;" title="${errors.join(', ')}">✗</span>`}</td>`;
         tbody.appendChild(tr);
       }
@@ -2358,6 +2461,20 @@ async function importSiswa() {
   btn.textContent = 'Memproses...';
 
   try {
+    // Auto-create new rombel docs if needed
+    const newRombels = [...new Set(validRows.filter(r => r.isNewRombel).map(r => r.kelas))];
+    if (newRombels.length > 0) {
+      const rbBatch = db.batch();
+      newRombels.forEach(kelasNama => {
+        rbBatch.set(db.collection('rombel').doc(kelasNama), {
+          nama: kelasNama,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      await rbBatch.commit();
+      rombelCache = null;
+    }
+
     if (mode === 'replace') {
       // Delete all students in affected classes first
       const affectedKelas = [...new Set(validRows.map(r => r.kelas))];
@@ -2669,6 +2786,8 @@ async function loadMapelTab() {
     const check = await db.collection('mapel').limit(1).get();
     const seedBtn = document.getElementById('seed-mapel-btn');
     if (seedBtn) seedBtn.style.display = check.empty ? 'inline-flex' : 'none';
+
+    checkAndShowMigrasiBtn();
 
     const mapelList = await getMapelList(true);
     if (mapelList.length === 0) {
@@ -3283,6 +3402,382 @@ function showToast(msg, type = '') {
   t.textContent = msg;
   c.appendChild(t);
   setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, 2500);
+}
+
+// ─── SISWA SUB-TABS ──────────────────────────────────
+function switchSiswaSubTab(tab) {
+  const subSiswa = document.getElementById('siswa-sub-siswa');
+  const subRombel = document.getElementById('siswa-sub-rombel');
+  const btnSiswa = document.getElementById('siswa-subtab-btn-siswa');
+  const btnRombel = document.getElementById('siswa-subtab-btn-rombel');
+  if (!subSiswa || !subRombel) return;
+  subSiswa.style.display = tab === 'siswa' ? 'block' : 'none';
+  subRombel.style.display = tab === 'rombel' ? 'block' : 'none';
+  if (btnSiswa) btnSiswa.classList.toggle('active', tab === 'siswa');
+  if (btnRombel) btnRombel.classList.toggle('active', tab === 'rombel');
+  if (tab === 'rombel') loadRombelTab();
+}
+
+// ─── ROMBEL HELPERS ───────────────────────────────────
+async function getRombelList(forceRefresh = false) {
+  if (rombelCache && !forceRefresh) return rombelCache;
+  try {
+    const [rombelSnap, allSiswa] = await Promise.all([
+      db.collection('rombel').get(),
+      getAllSiswa(),
+    ]);
+    const list = rombelSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const rombelIds = new Set(list.map(r => r.id));
+    // Add kelas from siswa that aren't in rombel collection
+    const kelasFromSiswa = [...new Set(allSiswa.map(s => s.kelas))];
+    kelasFromSiswa.forEach(k => {
+      if (!rombelIds.has(k)) list.push({ id: k, nama: k, fromSiswaOnly: true });
+    });
+    // Attach student counts
+    rombelCache = list.map(r => ({
+      ...r,
+      jumlahSiswa: allSiswa.filter(s => s.kelas === r.id).length,
+    })).sort((a, b) => (a.nama || a.id).localeCompare(b.nama || b.id));
+    return rombelCache;
+  } catch (e) { return []; }
+}
+
+function invalidateRombelCache() { rombelCache = null; }
+
+async function loadRombelTab() {
+  const container = document.getElementById('rombel-list-container');
+  if (!container) return;
+  container.innerHTML = '<div class="loading"><div class="spinner"></div>Memuat rombel...</div>';
+  try {
+    await checkAndShowFixKelasBtn();
+    const list = await getRombelList(true);
+    if (list.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">🏫</div><p>Belum ada rombongan belajar.<br>Klik "+ Tambah Rombel" untuk memulai.</p></div>';
+      return;
+    }
+    container.innerHTML = '';
+    list.forEach(r => {
+      const namaSafe = (r.nama || r.id).replace(/'/g, "\\'");
+      const card = document.createElement('div');
+      card.className = 'rombel-card';
+      card.innerHTML = `
+        <div style="width:44px;height:44px;border-radius:12px;background:var(--teal-soft);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🏫</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:700;">${r.nama || r.id}</div>
+          <div style="font-size:12px;color:var(--text3);">${r.jumlahSiswa} siswa</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button class="btn btn-outline btn-sm" onclick="renameRombel('${r.id}','${namaSafe}')">✏️ Rename</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRombel('${r.id}','${namaSafe}',${r.jumlahSiswa})">🗑️ Hapus</button>
+        </div>`;
+      container.appendChild(card);
+    });
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+  }
+}
+
+async function showTambahRombel() {
+  const nama = prompt('Nama rombel baru (contoh: IX-A):');
+  if (!nama || !nama.trim()) return;
+  const trimmed = nama.trim();
+  try {
+    const existing = await db.collection('rombel').doc(trimmed).get();
+    if (existing.exists) { showToast(`Rombel "${trimmed}" sudah ada`, 'error'); return; }
+    await db.collection('rombel').doc(trimmed).set({
+      nama: trimmed,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    invalidateRombelCache();
+    showToast(`Rombel "${trimmed}" berhasil ditambahkan ✓`, 'success');
+    loadRombelTab();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function renameRombel(rombelId, currentNama) {
+  const newNama = prompt(`Nama baru untuk rombel "${currentNama}":`, currentNama);
+  if (!newNama || newNama.trim() === currentNama) return;
+  const trimmed = newNama.trim();
+  if (!confirm(`Rename rombel "${currentNama}" → "${trimmed}"?\n\nIni akan mengupdate data siswa, nilai, mapel, dan rombel.`)) return;
+  const CHUNK = 500;
+  try {
+    // Update siswa
+    const siswaSnap = await db.collection('siswa').where('kelas', '==', rombelId).get();
+    for (let i = 0; i < siswaSnap.docs.length; i += CHUNK) {
+      const batch = db.batch();
+      siswaSnap.docs.slice(i, i + CHUNK).forEach(d => batch.update(d.ref, { kelas: trimmed }));
+      await batch.commit();
+    }
+    // Update nilai
+    const nilaiSnap = await db.collection('nilai').where('kelas', '==', rombelId).get();
+    for (let i = 0; i < nilaiSnap.docs.length; i += CHUNK) {
+      const batch = db.batch();
+      nilaiSnap.docs.slice(i, i + CHUNK).forEach(d => batch.update(d.ref, { kelas: trimmed }));
+      await batch.commit();
+    }
+    // Update mapel kelas[] array
+    const mapelSnap = await db.collection('mapel').get();
+    const mapelBatch = db.batch();
+    mapelSnap.docs.forEach(d => {
+      const data = d.data();
+      if (!data.kelas) return;
+      const updated = data.kelas.map(k => k.kelasId === rombelId ? { ...k, kelasId: trimmed } : k);
+      if (updated.some((k, i) => k.kelasId !== (data.kelas[i] || {}).kelasId))
+        mapelBatch.update(d.ref, { kelas: updated });
+    });
+    await mapelBatch.commit();
+    // Rename rombel doc (delete old, create new)
+    const oldDoc = await db.collection('rombel').doc(rombelId).get();
+    const renameBatch = db.batch();
+    const newData = oldDoc.exists
+      ? { ...oldDoc.data(), nama: trimmed, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }
+      : { nama: trimmed, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+    renameBatch.set(db.collection('rombel').doc(trimmed), newData);
+    if (oldDoc.exists) renameBatch.delete(db.collection('rombel').doc(rombelId));
+    await renameBatch.commit();
+
+    invalidateSiswaCache();
+    mapelCache = null;
+    invalidateRombelCache();
+    showToast(`Rombel berhasil direname ke "${trimmed}" ✓`, 'success');
+    loadRombelTab();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function deleteRombel(rombelId, nama, jumlahSiswa) {
+  const msg = jumlahSiswa > 0
+    ? `Hapus rombel "${nama}" beserta ${jumlahSiswa} siswa di dalamnya?\n\nData nilai tidak ikut terhapus.`
+    : `Hapus rombel "${nama}"?`;
+  if (!confirm(msg)) return;
+  const CHUNK = 500;
+  try {
+    if (jumlahSiswa > 0) {
+      const siswaSnap = await db.collection('siswa').where('kelas', '==', rombelId).get();
+      for (let i = 0; i < siswaSnap.docs.length; i += CHUNK) {
+        const batch = db.batch();
+        siswaSnap.docs.slice(i, i + CHUNK).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+    }
+    await db.collection('rombel').doc(rombelId).delete();
+    invalidateSiswaCache();
+    invalidateRombelCache();
+    showToast(`Rombel "${nama}" berhasil dihapus ✓`, 'success');
+    loadRombelTab();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+// ─── PINDAH ROMBEL ────────────────────────────────────
+async function showPindahRombel() {
+  const n = selectedSiswaIds.size;
+  if (n === 0) return;
+  document.getElementById('pindah-rombel-info').textContent = `Pindahkan ${n} siswa ke rombel:`;
+  const sel = document.getElementById('pindah-rombel-select');
+  sel.innerHTML = '<option value="">-- Pilih Rombel --</option>';
+  try {
+    const list = await getRombelList();
+    list.forEach(r => { sel.innerHTML += `<option value="${r.id}">${r.nama || r.id}</option>`; });
+  } catch (e) { showToast('Gagal memuat daftar rombel', 'error'); return; }
+  openModal('modal-pindah-rombel');
+}
+
+async function doPindahRombel() {
+  const target = document.getElementById('pindah-rombel-select').value;
+  if (!target) { showToast('Pilih rombel tujuan', 'error'); return; }
+  const ids = [...selectedSiswaIds];
+  const CHUNK = 500;
+  try {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const batch = db.batch();
+      ids.slice(i, i + CHUNK).forEach(nomor => batch.update(db.collection('siswa').doc(nomor), { kelas: target }));
+      await batch.commit();
+    }
+    invalidateSiswaCache();
+    selectedSiswaIds.clear();
+    closeModal('modal-pindah-rombel');
+    updateDeleteSelectedBtn();
+    showToast(`${ids.length} siswa berhasil dipindah ke ${target} ✓`, 'success');
+    await initSiswaTab();
+    loadSiswaList(target);
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+// ─── FIX NAMA KELAS (XII → IX) ───────────────────────
+async function checkAndShowFixKelasBtn() {
+  try {
+    const [snap1, snap2] = await Promise.all([
+      db.collection('siswa').where('kelas', '==', 'XII-1').limit(1).get(),
+      db.collection('siswa').where('kelas', '==', 'XII-2').limit(1).get(),
+    ]);
+    const btn = document.getElementById('btn-fix-kelas');
+    if (btn) btn.style.display = (!snap1.empty || !snap2.empty) ? 'inline-flex' : 'none';
+  } catch (e) { console.error('checkAndShowFixKelasBtn:', e); }
+}
+
+async function fixNamaKelas() {
+  if (!confirm('Fix nama kelas?\n\nXII-1 → IX-A\nXII-2 → IX-B\n\nOperasi ini akan mengupdate collection siswa, nilai, mapel, dan rombel.')) return;
+  const container = document.getElementById('rombel-list-container');
+  container.innerHTML = '<div style="padding:16px;"><div style="font-weight:700;margin-bottom:8px;">🔧 Memproses fix nama kelas...</div><div id="fix-kelas-log" class="migrasi-log"></div></div>';
+  const addLog = msg => { const el = document.getElementById('fix-kelas-log'); if (el) el.innerHTML += `<div>${msg}</div>`; el.scrollTop = el.scrollHeight; };
+  const mapping = { 'XII-1': 'IX-A', 'XII-2': 'IX-B' };
+  const CHUNK = 500;
+  let totSiswa = 0, totNilai = 0, totMapel = 0, totRombel = 0;
+  try {
+    // Fix siswa
+    for (const [oldK, newK] of Object.entries(mapping)) {
+      const snap = await db.collection('siswa').where('kelas', '==', oldK).get();
+      if (!snap.empty) {
+        addLog(`▶ Siswa: ${snap.size} dokumen "${oldK}" → "${newK}"`);
+        for (let i = 0; i < snap.docs.length; i += CHUNK) {
+          const batch = db.batch();
+          snap.docs.slice(i, i + CHUNK).forEach(d => batch.update(d.ref, { kelas: newK }));
+          await batch.commit();
+        }
+        totSiswa += snap.size;
+      }
+    }
+    // Fix nilai
+    for (const [oldK, newK] of Object.entries(mapping)) {
+      const snap = await db.collection('nilai').where('kelas', '==', oldK).get();
+      if (!snap.empty) {
+        addLog(`▶ Nilai: ${snap.size} dokumen "${oldK}" → "${newK}"`);
+        for (let i = 0; i < snap.docs.length; i += CHUNK) {
+          const batch = db.batch();
+          snap.docs.slice(i, i + CHUNK).forEach(d => batch.update(d.ref, { kelas: newK }));
+          await batch.commit();
+        }
+        totNilai += snap.size;
+      }
+    }
+    // Fix mapel kelas[] array
+    const mapelSnap = await db.collection('mapel').get();
+    const mapelBatch = db.batch();
+    mapelSnap.docs.forEach(d => {
+      const data = d.data();
+      if (!data.kelas) return;
+      let changed = false;
+      const updated = data.kelas.map(k => {
+        if (mapping[k.kelasId]) { changed = true; return { ...k, kelasId: mapping[k.kelasId] }; }
+        return k;
+      });
+      if (changed) { mapelBatch.update(d.ref, { kelas: updated }); totMapel++; }
+    });
+    await mapelBatch.commit();
+    if (totMapel > 0) addLog(`▶ Mapel: ${totMapel} dokumen diperbarui`);
+    // Fix rombel docs
+    for (const [oldId, newId] of Object.entries(mapping)) {
+      const oldDoc = await db.collection('rombel').doc(oldId).get();
+      if (oldDoc.exists) {
+        const batch = db.batch();
+        batch.set(db.collection('rombel').doc(newId), { ...oldDoc.data(), nama: newId, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        batch.delete(db.collection('rombel').doc(oldId));
+        await batch.commit();
+        totRombel++;
+        addLog(`▶ Rombel: "${oldId}" → "${newId}"`);
+      }
+    }
+
+    invalidateSiswaCache();
+    mapelCache = null;
+    invalidateRombelCache();
+
+    addLog(`\n✅ Selesai: ${totSiswa} siswa, ${totNilai} nilai, ${totMapel} mapel, ${totRombel} rombel`);
+    const logEl = document.getElementById('fix-kelas-log');
+    if (logEl) logEl.parentElement.insertAdjacentHTML('beforeend',
+      `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="loadRombelTab()">Reload Rombel</button></div>`);
+    showToast(`Fix selesai ✓`, 'success');
+    const btn = document.getElementById('btn-fix-kelas');
+    if (btn) btn.style.display = 'none';
+  } catch (e) {
+    showToast('Fix gagal: ' + e.message, 'error');
+    loadRombelTab();
+  }
+}
+
+// ─── MIGRASI DATA GURU LAMA ───────────────────────────
+async function checkAndShowMigrasiBtn() {
+  try {
+    const snap = await db.collection('users').where('role', '==', 'guru').get();
+    const hasOldFormat = snap.docs.some(d => {
+      const mapel = d.data().mapel;
+      return Array.isArray(mapel) && mapel.some(item => typeof item === 'string');
+    });
+    const btn = document.getElementById('migrasi-guru-btn');
+    if (btn) btn.style.display = hasOldFormat ? 'inline-flex' : 'none';
+  } catch (e) { console.error('checkAndShowMigrasiBtn:', e); }
+}
+
+async function migrasiDataGuru() {
+  if (!confirm('Mulai migrasi data guru lama ke format baru?\n\nProses ini akan membaca data guru dengan format mapel lama (array of strings) dan mengassign mereka ke kelas di collection mapel.')) return;
+  const container = document.getElementById('mapel-list-container');
+  container.innerHTML = `<div style="padding:16px;">
+    <div style="font-weight:700;margin-bottom:8px;">🔄 Migrasi berlangsung...</div>
+    <div id="migrasi-log" class="migrasi-log"></div>
+  </div>`;
+  const addLog = msg => { const el = document.getElementById('migrasi-log'); if (el) { el.innerHTML += `<div>${msg}</div>`; el.scrollTop = el.scrollHeight; } };
+
+  let berhasil = 0, skip = 0, gagal = 0;
+  try {
+    const snap = await db.collection('users').where('role', '==', 'guru').get();
+    const guruOld = snap.docs.filter(d => {
+      const mapel = d.data().mapel;
+      return Array.isArray(mapel) && mapel.some(item => typeof item === 'string');
+    });
+    if (guruOld.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Tidak ada data guru format lama yang perlu dimigrasi.</p></div>';
+      showToast('Tidak ada data untuk dimigrasi', 'success');
+      const btn = document.getElementById('migrasi-guru-btn');
+      if (btn) btn.style.display = 'none';
+      loadMapelTab();
+      return;
+    }
+    addLog(`Ditemukan ${guruOld.length} guru dengan format lama.`);
+    // Load mapel docs for lookup
+    const mapelSnap = await db.collection('mapel').get();
+    const mapelByKode = {};
+    mapelSnap.docs.forEach(d => { mapelByKode[d.data().kode || d.id] = { id: d.id, ...d.data() }; });
+
+    for (const guruDoc of guruOld) {
+      const guruData = guruDoc.data();
+      const guruUid = guruDoc.id;
+      const guruNama = guruData.nama || guruUid;
+      const oldMapel = (guruData.mapel || []).filter(item => typeof item === 'string');
+      addLog(`\n▶ ${guruNama}`);
+      let guruChanged = false;
+
+      for (const mapelId of oldMapel) {
+        const mapelDoc = mapelByKode[mapelId];
+        if (!mapelDoc) { addLog(`  ⚠️ Mapel "${mapelId}" tidak ditemukan, skip.`); continue; }
+        const existingKelas = mapelDoc.kelas || [];
+        const kelasKosong = existingKelas.filter(k => !k.guruUid);
+        if (kelasKosong.length === 0) { addLog(`  ↷ "${mapelId}" semua kelas sudah punya pengampu.`); skip++; continue; }
+        const updatedKelas = existingKelas.map(k => k.guruUid ? k : { ...k, guruUid, guruNama });
+        await db.collection('mapel').doc(mapelDoc.id).update({ kelas: updatedKelas });
+        addLog(`  ✓ "${mapelId}": assign ke ${kelasKosong.length} kelas`);
+        guruChanged = true;
+      }
+      // Mark guru as migrated
+      try { await db.collection('users').doc(guruUid).update({ mapel: 'migrated' }); } catch (_) {}
+      if (guruChanged) { berhasil++; addLog(`  ✅ Berhasil dimigrasi`); }
+      else { skip++; addLog(`  ↷ Tidak ada perubahan`); }
+    }
+
+    mapelCache = null;
+    const logEl = document.getElementById('migrasi-log');
+    if (logEl) logEl.parentElement.insertAdjacentHTML('beforeend', `
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <span class="badge badge-green">✓ Berhasil: ${berhasil}</span>
+        <span class="badge badge-gray">↷ Skip: ${skip}</span>
+        ${gagal > 0 ? `<span class="badge badge-red">✗ Gagal: ${gagal}</span>` : ''}
+        <button class="btn btn-primary btn-sm" onclick="loadMapelTab()">Tutup & Reload</button>
+      </div>`);
+    const btn = document.getElementById('migrasi-guru-btn');
+    if (btn) btn.style.display = 'none';
+    showToast(`Migrasi selesai: ${berhasil} berhasil, ${skip} skip ✓`, berhasil > 0 ? 'success' : '');
+  } catch (e) {
+    showToast('Migrasi gagal: ' + e.message, 'error');
+    loadMapelTab();
+  }
 }
 
 // ─── ENTER KEY LOGIN ──────────────────────────────────

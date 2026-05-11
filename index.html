@@ -1452,8 +1452,6 @@ async function checkUserRole(uid) {
     if (doc.exists) {
       const data = doc.data();
       currentRole = data.role;
-      // Seed siswa from SISWA_DATA if Firestore collection is still empty
-      await seedSiswaIfEmpty();
       if (data.role === 'admin') {
         showPage('page-admin');
         loadAdminDashboard();
@@ -1827,7 +1825,8 @@ function invalidateSiswaCache() { siswaCache = null; }
 
 async function initSiswaTab() {
   try {
-    await seedSiswaIfEmpty();
+    // Seed silently — if Firestore rules don't allow it yet, getAllSiswa() falls back to SISWA_DATA
+    try { await seedSiswaIfEmpty(); } catch (_) {}
     const kelasList = await getUniqueKelas();
     // Populate kelas select in forms
     ['siswa-kelas'].forEach(id => {

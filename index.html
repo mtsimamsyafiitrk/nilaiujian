@@ -2529,8 +2529,8 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
   const fKeys = Array.from({length: s.jumlahTugas}, (_, i) => `f${i+1}`);
   const uhKeys = Array.from({length: s.jumlahUH}, (_, i) => `uh${i+1}`);
   const sumatifKeys = s.adaUTS ? [...uhKeys, 'uts'] : uhKeys;
-  const sumatifSpan = sumatifKeys.length;
   const formatifSpan = fKeys.length;
+  const sumatifSpan = sumatifKeys.length;
 
   let html = `<div class="nilai-table-wrap"><table class="nilai-table">
     <thead>
@@ -2539,6 +2539,7 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
         <th colspan="${formatifSpan}" class="group-header">NILAI FORMATIF (Bobot ${s.bobotFormatif}%)</th>
         <th colspan="${sumatifSpan}" class="group-header">NILAI SUMATIF (Bobot ${s.bobotSumatif}%)</th>
         <th rowspan="2" style="background:var(--teal);">Nilai<br>Rapor</th>
+        <th rowspan="2" style="background:#7c3aed;color:#fff;">Nilai<br>UM</th>
         <th rowspan="2" style="background:#92400e;">Nilai<br>Ijazah</th>
       </tr>
       <tr>`;
@@ -2549,7 +2550,8 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
 
   siswaList.forEach(sw => {
     const n = nilaiMap[sw.nomor] || {};
-    const rapor = n.nilaiRapor != null ? n.nilaiRapor.toFixed(2) : '-';
+    const rapor  = n.nilaiRapor  != null ? n.nilaiRapor.toFixed(2)  : '-';
+    const um     = n.nilaiUM     != null ? n.nilaiUM.toFixed(2)      : '-';
     const ijazah = n.nilaiIjazah != null ? n.nilaiIjazah.toFixed(2) : '-';
 
     html += `<tr><td class="sticky-col" title="${sw.nama}">${sw.nama}</td>`;
@@ -2558,6 +2560,9 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
       fKeys.forEach(k => html += `<td>${n[k] != null ? n[k] : '-'}</td>`);
       uhKeys.forEach(k => html += `<td>${n[k] != null ? n[k] : '-'}</td>`);
       if (s.adaUTS) html += `<td>${n.uts != null ? n.uts : '-'}</td>`;
+      html += `<td><span class="nilai-computed rapor">${rapor}</span></td>`;
+      html += `<td><span style="font-weight:700;color:#7c3aed;">${um}</span></td>`;
+      html += `<td><span class="nilai-computed ijazah">${ijazah}</span></td>`;
     } else {
       const allKeys = [...fKeys, ...sumatifKeys];
       allKeys.forEach(key => {
@@ -2567,10 +2572,14 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
           oninput="computeNilai('${sw.nomor}')"
           onblur="this.value=this.value?parseFloat(this.value).toFixed(0):''"></td>`;
       });
+      html += `<td><span class="nilai-computed rapor" id="rap_${sw.nomor}">${rapor}</span></td>`;
+      html += `<td><input type="number" min="0" max="100" step="0.01"
+        id="inp_${sw.nomor}_um" value="${n.nilaiUM ?? ''}"
+        oninput="computeNilai('${sw.nomor}')"
+        onblur="this.value=this.value?parseFloat(this.value).toFixed(0):''"
+        style="background:#f5f3ff;border-color:#c4b5fd;" placeholder="UM"></td>`;
+      html += `<td><span class="nilai-computed ijazah" id="ija_${sw.nomor}">${ijazah}</span></td>`;
     }
-
-    html += `<td><span class="nilai-computed rapor" id="rap_${sw.nomor}">${rapor}</span></td>`;
-    html += `<td><span class="nilai-computed ijazah" id="ija_${sw.nomor}">${ijazah}</span></td>`;
     html += `</tr>`;
   });
 
@@ -2602,10 +2611,17 @@ function computeNilai(nomor) {
   else if (A !== null) rapor = A;
   else if (B !== null) rapor = B;
 
+  // Nilai Ijazah = 60% Rapor + 40% Ujian Madrasah
+  const umEl = document.getElementById(`inp_${nomor}_um`);
+  const um = umEl && umEl.value !== '' ? parseFloat(umEl.value) : null;
+  let ijazah = null;
+  if (rapor !== null && um !== null) ijazah = rapor * 0.6 + um * 0.4;
+  else if (rapor !== null) ijazah = rapor; // tampil sementara jika UM belum diisi
+
   const rapEl = document.getElementById(`rap_${nomor}`);
   const ijaEl = document.getElementById(`ija_${nomor}`);
   if (rapEl) rapEl.textContent = rapor !== null ? rapor.toFixed(2) : '-';
-  if (ijaEl) ijaEl.textContent = rapor !== null ? rapor.toFixed(2) : '-';
+  if (ijaEl) ijaEl.textContent = ijazah !== null ? ijazah.toFixed(2) : '-';
 }
 
 async function saveAllNilai() {
@@ -2647,9 +2663,20 @@ async function saveAllNilai() {
       else if (A !== null) data.nilaiRapor = A;
       else if (B !== null) data.nilaiRapor = B;
       else data.nilaiRapor = null;
-      data.nilaiIjazah = data.nilaiRapor;
       data.nilaiA = A;
       data.nilaiB = B;
+
+      // Nilai UM
+      const umEl = document.getElementById(`inp_${sw.nomor}_um`);
+      const umVal = umEl && umEl.value !== '' ? parseFloat(umEl.value) : null;
+      data.nilaiUM = umVal;
+      if (umVal !== null) hasData = true;
+
+      // Nilai Ijazah = 60% Rapor + 40% UM
+      if (data.nilaiRapor !== null && umVal !== null)
+        data.nilaiIjazah = data.nilaiRapor * 0.6 + umVal * 0.4;
+      else
+        data.nilaiIjazah = data.nilaiRapor; // fallback: sama dengan rapor jika UM belum ada
 
       if (hasData) {
         batch.set(db.collection('nilai').doc(`${currentInputMapelId}_${sw.nomor}`), data, { merge: true });
@@ -2705,7 +2732,7 @@ async function exportExcel() {
     header.push(`Nilai A (Formatif ${s.bobotFormatif}%)`);
     uhKeys.forEach((_, i) => header.push(`UH ${i+1}`));
     if (s.adaUTS) header.push('UTS');
-    header.push(`Nilai B (Sumatif ${s.bobotSumatif}%)`, 'NILAI RAPOR', 'NILAI IJAZAH', 'PERINGKAT');
+    header.push(`Nilai B (Sumatif ${s.bobotSumatif}%)`, 'NILAI RAPOR', 'NILAI UM', 'NILAI IJAZAH (60%R+40%UM)', 'PERINGKAT');
     rows.push(header);
 
     sorted.forEach((sw, idx) => {
@@ -2716,7 +2743,8 @@ async function exportExcel() {
       uhKeys.forEach(k => row.push(n[k] ?? ''));
       if (s.adaUTS) row.push(n.uts ?? '');
       row.push(n.nilaiB != null ? +n.nilaiB.toFixed(2) : '');
-      row.push(n.nilaiRapor != null ? +n.nilaiRapor.toFixed(2) : '');
+      row.push(n.nilaiRapor  != null ? +n.nilaiRapor.toFixed(2)  : '');
+      row.push(n.nilaiUM     != null ? +n.nilaiUM.toFixed(2)     : '');
       row.push(n.nilaiIjazah != null ? +n.nilaiIjazah.toFixed(2) : '');
       row.push('');
       rows.push(row);

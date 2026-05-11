@@ -2226,6 +2226,17 @@ function getNilaiHurufLabel(huruf) {
 function getNilaiHurufColor(huruf) {
   return { A:'#16a34a', B:'#0891b2', C:'#d97706', D:'#ea580c', E:'#ef4444' }[huruf] || 'var(--text3)';
 }
+function getDeskripsiNilai(huruf, deskripsi) {
+  if (!deskripsi || !huruf || huruf === '-') return '';
+  const templates = {
+    A: `Sangat baik dalam memahami dan mengimplementasikan materi ${deskripsi}. Pertahankan prestasi ini.`,
+    B: `Baik dalam memahami materi ${deskripsi}. Tingkatkan lagi untuk hasil yang lebih optimal.`,
+    C: `Cukup memahami materi ${deskripsi}. Perlu lebih banyak latihan dan pemahaman.`,
+    D: `Kurang dalam penguasaan materi ${deskripsi}. Diperlukan bimbingan dan latihan tambahan.`,
+    E: `Perlu mengulang kembali materi ${deskripsi}. Sangat dianjurkan untuk mengikuti remidial.`,
+  };
+  return templates[huruf] || '';
+}
 
 async function getMapelSettings(mapelId) {
   if (settingsCache[mapelId]) return settingsCache[mapelId];
@@ -2453,7 +2464,7 @@ async function loadAdminNilai() {
     ]);
     const nilaiMap = {};
     snap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
-    container.innerHTML = renderNilaiTable(mapelId, allSiswa, nilaiMap, true, settings);
+    container.innerHTML = renderNilaiTable(mapelId, allSiswa, nilaiMap, true, settings, settings.deskripsi || '');
   } catch (e) {
     container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
   }
@@ -2545,13 +2556,14 @@ async function loadInputNilaiTable() {
     currentNilaiSettings = settings;
     const nilaiMap = {};
     snap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
-    container.innerHTML = renderNilaiTable(currentInputMapelId, siswa, nilaiMap, false, settings);
+    const deskripsiInput = document.getElementById('input-deskripsi-mapel')?.value || '';
+    container.innerHTML = renderNilaiTable(currentInputMapelId, siswa, nilaiMap, false, settings, deskripsiInput);
   } catch (e) {
     container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
   }
 }
 
-function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
+function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings, deskripsi = '') {
   const s = settings || SETTINGS_FALLBACK;
   const fKeys = Array.from({length: s.jumlahTugas}, (_, i) => `f${i+1}`);
   const uhKeys = Array.from({length: s.jumlahUH}, (_, i) => `uh${i+1}`);
@@ -2569,6 +2581,7 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
         <th rowspan="2" style="background:#1e40af;color:#fff;">Nilai<br>Huruf</th>
         <th rowspan="2" style="background:#7c3aed;color:#fff;">Nilai<br>UM</th>
         <th rowspan="2" style="background:#92400e;">Nilai<br>Ijazah</th>
+        <th rowspan="2" style="background:#065f46;color:#fff;min-width:240px;">Deskripsi<br>Rapor</th>
       </tr>
       <tr>`;
   fKeys.forEach((_, i) => html += `<th>Tugas ${i+1}</th>`);
@@ -2594,6 +2607,8 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
       html += `<td style="text-align:center;"><span style="font-weight:700;font-size:15px;color:${getNilaiHurufColor(huruf)};" title="${getNilaiHurufLabel(huruf)}">${huruf}</span></td>`;
       html += `<td><span style="font-weight:700;color:#7c3aed;">${um}</span></td>`;
       html += `<td><span class="nilai-computed ijazah">${ijazah}</span></td>`;
+      const deskRaporRO = getDeskripsiNilai(huruf, deskripsi);
+      html += `<td style="font-size:12px;color:#374151;min-width:240px;line-height:1.5;">${deskRaporRO || '<span style="color:#9ca3af;">-</span>'}</td>`;
     } else {
       const allKeys = [...fKeys, ...sumatifKeys];
       allKeys.forEach(key => {
@@ -2611,6 +2626,8 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings) {
         onblur="this.value=this.value?parseFloat(this.value).toFixed(0):''"
         style="background:#f5f3ff;border-color:#c4b5fd;" placeholder="UM"></td>`;
       html += `<td><span class="nilai-computed ijazah" id="ija_${sw.nomor}">${ijazah}</span></td>`;
+      const deskRaporEdit = getDeskripsiNilai(huruf, deskripsi);
+      html += `<td style="font-size:12px;color:#374151;min-width:240px;line-height:1.5;"><span id="dsk_${sw.nomor}">${deskRaporEdit || '<span style="color:#9ca3af;">-</span>'}</span></td>`;
     }
     html += `</tr>`;
   });
@@ -2662,6 +2679,12 @@ function computeNilai(nomor) {
     hurEl.title = getNilaiHurufLabel(huruf);
   }
   if (ijaEl) ijaEl.textContent = ijazah !== null ? ijazah.toFixed(2) : '-';
+  const dskEl = document.getElementById(`dsk_${nomor}`);
+  if (dskEl) {
+    const deskripsiMapel = document.getElementById('input-deskripsi-mapel')?.value || '';
+    const deskTeks = getDeskripsiNilai(huruf, deskripsiMapel);
+    dskEl.innerHTML = deskTeks || '<span style="color:#9ca3af;">-</span>';
+  }
 }
 
 async function saveAllNilai() {
@@ -2674,6 +2697,7 @@ async function saveAllNilai() {
   const sumatifKeys = s.adaUTS ? [...uhKeys, 'uts'] : uhKeys;
   const allKeys = [...fKeys, ...sumatifKeys];
   const settingsSnapshot = { jumlahTugas: s.jumlahTugas, jumlahUH: s.jumlahUH, adaUTS: s.adaUTS, bobotFormatif: s.bobotFormatif, bobotSumatif: s.bobotSumatif };
+  const deskripsiMapelSave = (document.getElementById('input-deskripsi-mapel')?.value || '').trim();
 
   try {
     const siswa = await getSiswaByKelas(currentInputKelas);
@@ -2720,8 +2744,9 @@ async function saveAllNilai() {
       else
         data.nilaiIjazah = data.nilaiRapor;
 
-      // Nilai Huruf berdasarkan Nilai Rapor
+      // Nilai Huruf dan Deskripsi Rapor
       data.nilaiHuruf = getNilaiHuruf(data.nilaiRapor);
+      data.deskripsiRapor = getDeskripsiNilai(data.nilaiHuruf, deskripsiMapelSave);
 
       if (hasData) {
         batch.set(db.collection('nilai').doc(`${currentInputMapelId}_${sw.nomor}`), data, { merge: true });
@@ -2787,7 +2812,7 @@ async function exportExcel() {
     header.push(`Nilai A (Formatif ${s.bobotFormatif}%)`);
     uhKeys.forEach((_, i) => header.push(`UH ${i+1}`));
     if (s.adaUTS) header.push('UTS');
-    header.push(`Nilai B (Sumatif ${s.bobotSumatif}%)`, 'NILAI RAPOR', 'NILAI HURUF', 'NILAI UM', 'NILAI IJAZAH (60%R+40%UM)', 'DESKRIPSI MATERI', 'PERINGKAT');
+    header.push(`Nilai B (Sumatif ${s.bobotSumatif}%)`, 'NILAI RAPOR', 'NILAI HURUF', 'NILAI UM', 'NILAI IJAZAH (60%R+40%UM)', 'DESKRIPSI RAPOR', 'PERINGKAT');
     rows.push(header);
 
     // Ambil deskripsi mapel dari settings
@@ -2809,7 +2834,8 @@ async function exportExcel() {
       row.push(n.nilaiHuruf  || getNilaiHuruf(n.nilaiRapor));
       row.push(n.nilaiUM     != null ? +n.nilaiUM.toFixed(2)     : '');
       row.push(n.nilaiIjazah != null ? +n.nilaiIjazah.toFixed(2) : '');
-      row.push(deskripsiMapel);
+      const hurufSiswa = n.nilaiHuruf || getNilaiHuruf(n.nilaiRapor);
+      row.push(n.deskripsiRapor || getDeskripsiNilai(hurufSiswa, deskripsiMapel));
       row.push('');
       rows.push(row);
     });
@@ -2820,7 +2846,7 @@ async function exportExcel() {
       ...fKeys.map(()=>({wch:7})), {wch:16},
       ...uhKeys.map(()=>({wch:7})),
       ...(s.adaUTS ? [{wch:7}] : []),
-      {wch:16},{wch:12},{wch:12},{wch:10}
+      {wch:16},{wch:12},{wch:12},{wch:10},{wch:60},{wch:10}
     ];
 
     const wb = XLSX.utils.book_new();

@@ -3001,11 +3001,23 @@ async function seedMapelData() {
 async function loadGuruMapelList() {
   const container = document.getElementById('guru-mapel-list');
   container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-  if (!currentGuruMapel.length) {
-    container.innerHTML = '<div class="empty-state"><div class="icon">📚</div><p>Belum ada mapel yang ditugaskan.<br>Hubungi admin.</p></div>';
-    return;
-  }
   try {
+    // Selalu fetch ulang dari Firestore agar perubahan pengampu oleh admin langsung tampil
+    const uid = currentUser?.uid;
+    if (uid) {
+      const freshMapel = await getMapelList(true);
+      const entries = [];
+      freshMapel.forEach(m => {
+        const matched = (m.kelas || []).filter(k => k.guruUid === uid);
+        if (matched.length > 0)
+          entries.push({ mapelId: m.id, kelas: matched.map(k => k.kelasId) });
+      });
+      currentGuruMapel = entries;
+    }
+    if (!currentGuruMapel.length) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">📚</div><p>Belum ada mapel yang ditugaskan.<br>Hubungi admin.</p></div>';
+      return;
+    }
     const allSiswa = await getAllSiswa();
     const allKelas = [...new Set(allSiswa.map(s => s.kelas))].sort();
     container.innerHTML = '';

@@ -3308,8 +3308,10 @@ function computeNilai(nomor) {
   else if (B !== null) rapor = B;
 
   // Nilai Ijazah = 60% Rapor + 40% Ujian Madrasah
+  // UM kosong atau 0 dianggap belum diisi → ijazah tampil sementara = rapor
   const umEl = document.getElementById(`inp_${nomor}_um`);
-  const um = umEl && umEl.value !== '' ? parseFloat(umEl.value.replace(',', '.')) : null;
+  const umRaw = umEl && umEl.value !== '' ? parseFloat(umEl.value.replace(',', '.')) : null;
+  const um = (umRaw !== null && umRaw > 0) ? umRaw : null;
   let ijazah = null;
   if (rapor !== null && um !== null) ijazah = rapor * 0.6 + um * 0.4;
   else if (rapor !== null) ijazah = rapor; // tampil sementara jika UM belum diisi
@@ -3381,10 +3383,10 @@ async function saveAllNilai() {
       data.nilaiA = A;
       data.nilaiB = B;
 
-      // Nilai UM
+      // Nilai UM — 0 atau kosong dianggap belum diisi
       const umEl = document.getElementById(`inp_${sw.nomor}_um`);
       const umRaw = umEl && umEl.value !== '' ? parseFloat(umEl.value.replace(',', '.')) : null;
-      const umVal = umRaw !== null && !isNaN(umRaw) ? Math.min(100, Math.max(0, Math.round(umRaw))) : null;
+      const umVal = (umRaw !== null && !isNaN(umRaw) && umRaw > 0) ? Math.min(100, Math.max(0, Math.round(umRaw))) : null;
       data.nilaiUM = umVal;
       if (umVal !== null) hasData = true;
 

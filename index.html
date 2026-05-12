@@ -3290,13 +3290,11 @@ function computeNilai(nomor) {
 
   const fInputs = fKeys.map(k => {
     const el = document.getElementById(`inp_${nomor}_${k}`);
-    const raw = el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
-    return (raw !== null && raw > 0) ? raw : null;
+    return el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
   });
   const sInputs = sumatifKeys.map(k => {
     const el = document.getElementById(`inp_${nomor}_${k}`);
-    const raw = el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
-    return (raw !== null && raw > 0) ? raw : null;
+    return el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
   });
 
   const hasAnyF = fInputs.some(v => v !== null);
@@ -3309,14 +3307,13 @@ function computeNilai(nomor) {
   else if (A !== null) rapor = A;
   else if (B !== null) rapor = B;
 
-  // Nilai Ijazah = 60% Rapor + 40% Ujian Madrasah
-  // UM kosong atau 0 dianggap belum diisi → ijazah tampil sementara = rapor
+  // Nilai Ijazah = 60% Rapor + 40% UM
+  // UM kosong = 0, rumus selalu dipakai penuh
   const umEl = document.getElementById(`inp_${nomor}_um`);
-  const umRaw = umEl && umEl.value !== '' ? parseFloat(umEl.value.replace(',', '.')) : null;
-  const um = (umRaw !== null && umRaw > 0) ? umRaw : null;
+  const umRaw = umEl && umEl.value !== '' ? parseFloat(umEl.value.replace(',', '.')) : 0;
+  const um = isNaN(umRaw) ? 0 : Math.min(100, Math.max(0, umRaw));
   let ijazah = null;
-  if (rapor !== null && um !== null) ijazah = rapor * 0.6 + um * 0.4;
-  else if (rapor !== null) ijazah = rapor; // tampil sementara jika UM belum diisi
+  if (rapor !== null) ijazah = rapor * 0.6 + um * 0.4;
 
   const huruf = getNilaiHuruf(rapor);
   const rapEl = document.getElementById(`rap_${nomor}`);
@@ -3366,8 +3363,7 @@ async function saveAllNilai() {
         const el = document.getElementById(`inp_${sw.nomor}_${k}`);
         if (el && el.value !== '') {
           const v = parseFloat(el.value.replace(',', '.'));
-          const rounded = isNaN(v) ? null : Math.min(100, Math.max(0, Math.round(v)));
-          data[k] = (rounded !== null && rounded > 0) ? rounded : null;
+          data[k] = isNaN(v) ? null : Math.min(100, Math.max(0, Math.round(v)));
           if (data[k] !== null) hasData = true;
         } else data[k] = null;
       });
@@ -3386,18 +3382,15 @@ async function saveAllNilai() {
       data.nilaiA = A;
       data.nilaiB = B;
 
-      // Nilai UM — 0 atau kosong dianggap belum diisi
+      // Nilai UM — kosong = 0, rumus selalu dipakai penuh
       const umEl = document.getElementById(`inp_${sw.nomor}_um`);
-      const umRaw = umEl && umEl.value !== '' ? parseFloat(umEl.value.replace(',', '.')) : null;
-      const umVal = (umRaw !== null && !isNaN(umRaw) && umRaw > 0) ? Math.min(100, Math.max(0, Math.round(umRaw))) : null;
-      data.nilaiUM = umVal;
-      if (umVal !== null) hasData = true;
+      const umRaw = umEl && umEl.value !== '' ? parseFloat(umEl.value.replace(',', '.')) : 0;
+      const umVal = isNaN(umRaw) ? 0 : Math.min(100, Math.max(0, Math.round(umRaw)));
+      data.nilaiUM = umEl && umEl.value !== '' ? umVal : null; // DB: null jika benar-benar kosong
+      if (data.nilaiUM !== null) hasData = true;
 
-      // Nilai Ijazah = 60% Rapor + 40% UM
-      if (data.nilaiRapor !== null && umVal !== null)
-        data.nilaiIjazah = data.nilaiRapor * 0.6 + umVal * 0.4;
-      else
-        data.nilaiIjazah = data.nilaiRapor;
+      // Nilai Ijazah = 60% Rapor + 40% UM (UM kosong = 0)
+      data.nilaiIjazah = data.nilaiRapor !== null ? data.nilaiRapor * 0.6 + umVal * 0.4 : null;
 
       // Nilai Huruf dan Deskripsi Rapor
       data.nilaiHuruf = getNilaiHuruf(data.nilaiRapor);

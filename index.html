@@ -3290,11 +3290,13 @@ function computeNilai(nomor) {
 
   const fInputs = fKeys.map(k => {
     const el = document.getElementById(`inp_${nomor}_${k}`);
-    return el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
+    const raw = el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
+    return (raw !== null && raw > 0) ? raw : null;
   });
   const sInputs = sumatifKeys.map(k => {
     const el = document.getElementById(`inp_${nomor}_${k}`);
-    return el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
+    const raw = el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
+    return (raw !== null && raw > 0) ? raw : null;
   });
 
   const hasAnyF = fInputs.some(v => v !== null);
@@ -3308,8 +3310,10 @@ function computeNilai(nomor) {
   else if (B !== null) rapor = B;
 
   // Nilai Ijazah = 60% Rapor + 40% Ujian Madrasah
+  // UM kosong atau 0 dianggap belum diisi → ijazah tampil sementara = rapor
   const umEl = document.getElementById(`inp_${nomor}_um`);
-  const um = umEl && umEl.value !== '' ? parseFloat(umEl.value.replace(',', '.')) : null;
+  const umRaw = umEl && umEl.value !== '' ? parseFloat(umEl.value.replace(',', '.')) : null;
+  const um = (umRaw !== null && umRaw > 0) ? umRaw : null;
   let ijazah = null;
   if (rapor !== null && um !== null) ijazah = rapor * 0.6 + um * 0.4;
   else if (rapor !== null) ijazah = rapor; // tampil sementara jika UM belum diisi
@@ -3362,7 +3366,8 @@ async function saveAllNilai() {
         const el = document.getElementById(`inp_${sw.nomor}_${k}`);
         if (el && el.value !== '') {
           const v = parseFloat(el.value.replace(',', '.'));
-          data[k] = isNaN(v) ? null : Math.min(100, Math.max(0, Math.round(v)));
+          const rounded = isNaN(v) ? null : Math.min(100, Math.max(0, Math.round(v)));
+          data[k] = (rounded !== null && rounded > 0) ? rounded : null;
           if (data[k] !== null) hasData = true;
         } else data[k] = null;
       });
@@ -3381,10 +3386,10 @@ async function saveAllNilai() {
       data.nilaiA = A;
       data.nilaiB = B;
 
-      // Nilai UM
+      // Nilai UM — 0 atau kosong dianggap belum diisi
       const umEl = document.getElementById(`inp_${sw.nomor}_um`);
       const umRaw = umEl && umEl.value !== '' ? parseFloat(umEl.value.replace(',', '.')) : null;
-      const umVal = umRaw !== null && !isNaN(umRaw) ? Math.min(100, Math.max(0, Math.round(umRaw))) : null;
+      const umVal = (umRaw !== null && !isNaN(umRaw) && umRaw > 0) ? Math.min(100, Math.max(0, Math.round(umRaw))) : null;
       data.nilaiUM = umVal;
       if (umVal !== null) hasData = true;
 

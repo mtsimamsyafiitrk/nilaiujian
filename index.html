@@ -1253,6 +1253,12 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
           <input type="text" id="mapel-icon" placeholder="📚" style="font-size:18px;text-align:center;">
         </div>
       </div>
+      <div class="form-group" style="margin-top:10px;margin-bottom:0;">
+        <label>Aktif di Kelas <span style="font-size:10px;font-weight:400;color:var(--text3);">(kosong = berlaku semua kelas)</span></label>
+        <div id="mapel-kelas-aktif-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;min-height:32px;padding:6px 0;">
+          <span style="font-size:12px;color:var(--text3);">Memuat daftar kelas...</span>
+        </div>
+      </div>
       <p style="font-size:11px;color:var(--text3);margin-top:10px;">Pengampu per rombel diatur di tab Mapel → tabel Pengampu.</p>
     </div>
     <div class="modal-footer">
@@ -2905,11 +2911,15 @@ async function loadMapelTab() {
     mapelList.forEach(m => {
       const div = document.createElement('div');
       div.className = 'list-item';
+      const kelasAktifBadge = m.kelasAktif && m.kelasAktif.length > 0
+        ? `<div style="font-size:11px;color:var(--teal);margin-top:2px;">🎯 ${m.kelasAktif.join(', ')}</div>`
+        : '';
       div.innerHTML = `
         <div class="list-avatar" style="font-size:22px;background:var(--teal-bg);">${m.icon || '📚'}</div>
         <div class="list-info">
           <div class="list-name">${m.nama}</div>
           <div class="list-sub">Kode: ${m.id} · Kel. ${m.kelompok || '—'} · Urut ${m.urut || '—'}</div>
+          ${kelasAktifBadge}
         </div>
         <div style="display:flex;gap:4px;">
           <button class="btn btn-outline btn-sm" onclick="showEditMapel('${m.id}')">Edit</button>
@@ -2923,7 +2933,24 @@ async function loadMapelTab() {
   }
 }
 
-function showAddMapel() {
+async function renderMapelKelasAktif(kelasAktif = []) {
+  const container = document.getElementById('mapel-kelas-aktif-list');
+  if (!container) return;
+  container.innerHTML = '<span style="font-size:12px;color:var(--text3);">Memuat...</span>';
+  const kelasList = await getUniqueKelas();
+  if (kelasList.length === 0) {
+    container.innerHTML = '<span style="font-size:12px;color:var(--text3);">Belum ada kelas terdaftar</span>';
+    return;
+  }
+  container.innerHTML = kelasList.map(k => {
+    const checked = kelasAktif.includes(k);
+    return `<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 12px;border:1px solid ${checked ? 'var(--teal)' : 'var(--border)'};border-radius:20px;background:${checked ? 'var(--teal-bg)' : 'var(--bg)'};transition:all .15s;">
+      <input type="checkbox" name="mapel-kelas-aktif" value="${k}" ${checked ? 'checked' : ''} style="accent-color:var(--teal);" onchange="const l=this.closest('label');const c=this.checked;l.style.background=c?'var(--teal-bg)':'var(--bg)';l.style.borderColor=c?'var(--teal)':'var(--border)';"> ${k}
+    </label>`;
+  }).join('');
+}
+
+async function showAddMapel() {
   document.getElementById('modal-mapel-title').textContent = 'Tambah Mapel';
   document.getElementById('edit-mapel-id').value = '';
   document.getElementById('mapel-kode').value = '';
@@ -2933,6 +2960,7 @@ function showAddMapel() {
   document.querySelector('input[name="mapel-kelompok"][value="A"]').checked = true;
   document.getElementById('mapel-urut').value = '';
   openModal('modal-mapel');
+  renderMapelKelasAktif([]);
 }
 
 async function showEditMapel(mapelId) {
@@ -2949,6 +2977,7 @@ async function showEditMapel(mapelId) {
   if (kelRadio) kelRadio.checked = true;
   document.getElementById('mapel-urut').value = m.urut || '';
   openModal('modal-mapel');
+  renderMapelKelasAktif(m.kelasAktif || []);
 }
 
 async function buildPengampuForm(existingKelas) {
@@ -2984,13 +3013,14 @@ async function saveMapel() {
   const icon = document.getElementById('mapel-icon').value.trim() || '📚';
   const kelompok = document.querySelector('input[name="mapel-kelompok"]:checked')?.value || 'A';
   const urut = parseInt(document.getElementById('mapel-urut').value) || 0;
+  const kelasAktif = [...document.querySelectorAll('input[name="mapel-kelas-aktif"]:checked')].map(cb => cb.value);
   const btn = document.getElementById('save-mapel-btn');
   if (!kode) { showToast('Kode mapel wajib diisi', 'error'); return; }
   if (!nama) { showToast('Nama mapel wajib diisi', 'error'); return; }
   btn.textContent = 'Menyimpan...'; btn.disabled = true;
   try {
     const docId = editId || kode;
-    const data = { kode, nama, icon, kelompok, urut, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    const data = { kode, nama, icon, kelompok, urut, kelasAktif, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
     if (!editId) {
       data.kelas = [];
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -3625,6 +3655,12 @@ async function loadPengampuTable() {
       html += `<tr style="border-bottom:1px solid var(--border);">
         <td style="padding:7px 14px;font-size:13px;font-weight:600;position:sticky;left:0;z-index:1;background:${bg};border-right:2px solid var(--border2);">${m.nama}</td>`;
       kelasList.forEach(k => {
+        const kelasAktif = m.kelasAktif || [];
+        const isAktif = kelasAktif.length === 0 || kelasAktif.includes(k);
+        if (!isAktif) {
+          html += `<td style="padding:4px 8px;background:var(--surface2);text-align:center;"><span style="font-size:11px;color:var(--text3);">—</span></td>`;
+          return;
+        }
         const cur = (assignMap[m.id] || {})[k] || '';
         html += `<td style="padding:4px 8px;background:${bg};">
           <select data-mapel="${m.id}" data-kelas="${k}" style="font-size:12px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;width:100%;background:white;cursor:pointer;">

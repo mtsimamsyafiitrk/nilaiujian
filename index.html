@@ -3290,11 +3290,13 @@ function computeNilai(nomor) {
 
   const fInputs = fKeys.map(k => {
     const el = document.getElementById(`inp_${nomor}_${k}`);
-    return el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
+    const raw = el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
+    return (raw !== null && raw > 0) ? raw : null;
   });
   const sInputs = sumatifKeys.map(k => {
     const el = document.getElementById(`inp_${nomor}_${k}`);
-    return el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
+    const raw = el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
+    return (raw !== null && raw > 0) ? raw : null;
   });
 
   const hasAnyF = fInputs.some(v => v !== null);
@@ -3364,7 +3366,8 @@ async function saveAllNilai() {
         const el = document.getElementById(`inp_${sw.nomor}_${k}`);
         if (el && el.value !== '') {
           const v = parseFloat(el.value.replace(',', '.'));
-          data[k] = isNaN(v) ? null : Math.min(100, Math.max(0, Math.round(v)));
+          const rounded = isNaN(v) ? null : Math.min(100, Math.max(0, Math.round(v)));
+          data[k] = (rounded !== null && rounded > 0) ? rounded : null;
           if (data[k] !== null) hasData = true;
         } else data[k] = null;
       });

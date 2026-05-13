@@ -1020,13 +1020,26 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
         📥 Export Excel
       </button>
     </div>
-    <div class="card card-body">
+    <div class="card card-body" style="margin-bottom:12px;">
       <h4 style="font-size:13px;font-weight:700;margin-bottom:12px;">📊 Export Gabungan (Semua Mapel)</h4>
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Export nilai rapor & ijazah semua siswa dari semua mapel.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" onclick="exportGabungan('rapor')">Gabungan Rapor</button>
         <button class="btn btn-outline btn-sm" onclick="exportGabungan('ijazah')">Gabungan Ijazah</button>
       </div>
+    </div>
+    <div class="card card-body">
+      <h4 style="font-size:13px;font-weight:700;margin-bottom:12px;">📄 Export Rapor PDF (Per Siswa)</h4>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Generate rapor lengkap per siswa dalam format PDF siap cetak.</p>
+      <div class="form-group">
+        <label>Pilih Kelas</label>
+        <select id="export-rapor-kelas">
+          <option value="">-- Pilih Kelas --</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-full" onclick="exportRaporPDF()">
+        📄 Buka Rapor PDF
+      </button>
     </div>
   </div>
 
@@ -1624,7 +1637,7 @@ function switchTab(tab) {
   if (tab === 'mapel') loadMapelTab();
   if (tab === 'dashboard') loadAdminDashboard();
   if (tab === 'nilai') { populateMapelSelect('admin-mapel-select'); populateKelasSelect('admin-kelas-select'); }
-  if (tab === 'export') { populateMapelSelect('export-mapel-select'); populateKelasSelect('export-kelas-select'); }
+  if (tab === 'export') { populateMapelSelect('export-mapel-select'); populateKelasSelect('export-kelas-select'); populateKelasSelect('export-rapor-kelas', '-- Pilih Kelas --'); }
   if (tab === 'pengaturan') loadSettingsTab();
 }
 
@@ -3584,6 +3597,205 @@ async function exportGabungan(type) {
   } catch (e) {
     showToast('Error: ' + e.message, 'error');
   }
+}
+
+// ─── EXPORT RAPOR PDF ─────────────────────────────────
+const RAPOR_STRUCTURE = [
+  { type: 'group', no: '1', label: "Pendidikan Agama", items: [
+    { sub: 'A', id: 'ALQURAN_HADIS',    nama: "Al-Qur'an Hadis" },
+    { sub: 'B', id: 'TAUHID',           nama: 'Akidah Akhlak' },
+    { sub: 'C', id: 'FIKIH',            nama: 'Fikih' },
+    { sub: 'D', id: 'SKI',              nama: 'Sejarah Kebudayaan Islam' },
+    { sub: 'E', id: 'BAHASA_ARAB',      nama: 'Bahasa Arab' },
+  ]},
+  { type: 'single', no: '2',  id: 'PPKN',             nama: 'Pendidikan Kewarganegaraan' },
+  { type: 'single', no: '3',  id: 'MTK',              nama: 'Matematika' },
+  { type: 'single', no: '4',  id: 'BAHASA_INDONESIA', nama: 'Bahasa Indonesia' },
+  { type: 'single', no: '5',  id: 'BAHASA_INGGRIS',   nama: 'Bahasa Inggris' },
+  { type: 'single', no: '6',  id: 'IPA',              nama: 'Ilmu Pengetahuan Alam' },
+  { type: 'single', no: '7',  id: 'IPS',              nama: 'Ilmu Pengetahuan Sosial' },
+  { type: 'single', no: '8',  id: 'KHOT',             nama: 'Seni Budaya (Khot)' },
+  { type: 'single', no: '9',  id: 'PJOK',             nama: 'Pend. Jasmani, Olahraga, dan Kesehatan' },
+  { type: 'single', no: '10', id: 'PRAKARYA',         nama: 'Prakarya / Informatika' },
+  { type: 'group', no: '11', label: "Muatan Lokal", items: [
+    { sub: 'A', id: 'TAHFIDZ',    nama: "Tahfidz Al-Qur'an" },
+    { sub: 'B', id: 'ILMU_TAJWID', nama: 'Ilmu Tajwid' },
+    { sub: 'C', id: 'NAHWU',      nama: 'Ilmu Nahwu' },
+    { sub: 'D', id: 'ADAB',       nama: 'Ilmu Adab' },
+  ]},
+];
+
+async function exportRaporPDF() {
+  const kelas = document.getElementById('export-rapor-kelas').value;
+  if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
+
+  const win = window.open('', '_blank');
+  if (!win) { showToast('Pop-up diblokir browser. Izinkan pop-up lalu coba lagi.', 'error'); return; }
+  win.document.write('<html><body style="font-family:Arial;padding:30px;font-size:14pt;">⏳ Menyiapkan Rapor PDF...</body></html>');
+
+  showToast('Menyiapkan Rapor PDF...', '');
+  try {
+    const allSiswa = await getAllSiswa();
+    const siswaKelas = allSiswa.filter(sw => sw.kelas === kelas).sort((a, b) => a.no - b.no);
+    if (!siswaKelas.length) { win.close(); showToast('Tidak ada siswa di kelas ini', 'error'); return; }
+
+    const snap = await db.collection('nilai').where('kelas', '==', kelas).get();
+    const nilaiByStudent = {};
+    snap.docs.forEach(d => {
+      const data = d.data();
+      if (!nilaiByStudent[data.nomorPeserta]) nilaiByStudent[data.nomorPeserta] = {};
+      nilaiByStudent[data.nomorPeserta][data.mapelId] = data;
+    });
+
+    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}));
+    const html = `<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8">
+<title>Rapor ${kelas} - 2025/2026</title>
+<style>
+@page{size:A4 portrait;margin:1.2cm 1.4cm}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;font-size:9.5pt;color:#000}
+.page{width:100%;page-break-after:always}
+.page:last-child{page-break-after:avoid}
+table{width:100%;border-collapse:collapse}
+td,th{padding:3px 5px;font-size:9pt}
+.b td,.b th{border:1px solid #000}
+.title{text-align:center;font-size:12pt;font-weight:bold;text-transform:uppercase;margin-bottom:8px;padding:4px 0;border-bottom:2px solid #000}
+.sec{font-weight:bold;margin:6px 0 3px;font-size:9.5pt}
+.nil th{background:#d9e1f2;text-align:center;font-weight:bold}
+.nil td.c{text-align:center}
+.sign td{text-align:center;vertical-align:top;padding:4px 8px;font-size:9pt}
+.uline{display:inline-block;min-width:140px;border-top:1px solid #000;margin-top:2px}
+@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+${pages.join('\n')}
+</body></html>`;
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    showToast('Rapor PDF siap — gunakan Ctrl+P untuk mencetak ✓', 'success');
+  } catch (e) {
+    win.close();
+    showToast('Export gagal: ' + e.message, 'error');
+  }
+}
+
+function buildRaporPage(sw, kelas, nilaiSiswa) {
+  let nilaiRows = '';
+  let deskRows = '';
+  let deskIdx = 0;
+
+  function nilaiCells(mapelId) {
+    const n = nilaiSiswa[mapelId];
+    if (!n || n.nilaiRapor == null) return '<td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td>';
+    const val = (+n.nilaiRapor).toFixed(2);
+    const hur = (n.nilaiHuruf || getNilaiHuruf(n.nilaiRapor)) || '';
+    const h = hur === '-' ? '' : hur;
+    return `<td class="c">${val}</td><td class="c">${h}</td><td class="c">${val}</td><td class="c">${h}</td>`;
+  }
+
+  RAPOR_STRUCTURE.forEach(entry => {
+    if (entry.type === 'group') {
+      nilaiRows += `<tr><td class="c" style="font-weight:700">${entry.no}</td><td colspan="2" style="font-weight:700">${entry.label} :</td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td></tr>`;
+      entry.items.forEach(item => {
+        nilaiRows += `<tr><td class="c">${item.sub}</td><td colspan="2" style="padding-left:14px">${item.nama}</td>${nilaiCells(item.id)}</tr>`;
+        const n = nilaiSiswa[item.id];
+        if (n?.deskripsiRapor) deskRows += `<tr><td style="padding:2px 6px">${++deskIdx}. ${item.nama} — ${n.deskripsiRapor}</td></tr>`;
+      });
+    } else {
+      nilaiRows += `<tr><td class="c" style="font-weight:700">${entry.no}</td><td colspan="2">${entry.nama}</td>${nilaiCells(entry.id)}</tr>`;
+      const n = nilaiSiswa[entry.id];
+      if (n?.deskripsiRapor) deskRows += `<tr><td style="padding:2px 6px">${++deskIdx}. ${entry.nama} — ${n.deskripsiRapor}</td></tr>`;
+    }
+  });
+
+  return `<div class="page">
+<div class="title">PENCAPAIAN KOMPETENSI PESERTA DIDIK</div>
+<table style="margin-bottom:7px">
+  <tr>
+    <td style="width:130px">Nama Sekolah</td><td style="width:8px">:</td>
+    <td style="font-weight:700">MADRASAH TSANAWIYAH AL IMAM ASY-SYAFI'I TARAKAN</td>
+    <td style="width:110px">Kelas</td><td style="width:8px">:</td><td style="width:80px;font-weight:700">${kelas}</td>
+  </tr>
+  <tr>
+    <td>Alamat</td><td>:</td><td>JALAN SWARAN JAYA RT.15</td>
+    <td>Semester</td><td>:</td><td>GENAP</td>
+  </tr>
+  <tr>
+    <td>Nama Peserta Didik</td><td>:</td><td style="font-weight:700">${sw.nama}</td>
+    <td>Tahun Pelajaran</td><td>:</td><td>2025/2026</td>
+  </tr>
+  <tr><td>NISN</td><td>:</td><td>${sw.nisn}</td><td></td><td></td><td></td></tr>
+</table>
+
+<div class="sec">A. Nilai Sikap</div>
+<table class="b" style="margin-bottom:7px">
+  <tr><th style="width:130px">1. Sikap Spiritual</th><th style="width:70px">PREDIKAT</th><th>DESKRIPSI NILAI SIKAP SPIRITUAL</th></tr>
+  <tr><td></td><td class="c"></td><td style="height:28px"></td></tr>
+  <tr><th>2. Sikap Sosial</th><th>PREDIKAT</th><th>DESKRIPSI NILAI SIKAP SOSIAL</th></tr>
+  <tr><td></td><td class="c"></td><td style="height:28px"></td></tr>
+</table>
+
+<div class="sec">B. Nilai Pengetahuan Dan Keterampilan</div>
+<table class="b nil" style="margin-bottom:7px">
+  <tr>
+    <th rowspan="2" style="width:24px">No</th>
+    <th rowspan="2" colspan="2">Mata Pelajaran</th>
+    <th colspan="2">PENGETAHUAN</th>
+    <th colspan="2">KETERAMPILAN</th>
+  </tr>
+  <tr>
+    <th style="width:44px">NILAI</th><th style="width:52px">PREDIKAT</th>
+    <th style="width:44px">NILAI</th><th style="width:52px">PREDIKAT</th>
+  </tr>
+  ${nilaiRows}
+</table>
+
+<div class="sec">C. Deskripsi Pengetahuan dan Keterampilan</div>
+<table class="b" style="margin-bottom:7px">
+  ${deskRows || '<tr><td style="height:36px;padding:2px 6px"></td></tr>'}
+</table>
+
+<table class="b" style="margin-bottom:10px">
+  <tr>
+    <th colspan="3">Ketidakhadiran</th>
+    <th colspan="2">Catatan / Keterangan :</th>
+  </tr>
+  <tr>
+    <td style="width:110px">Sakit</td>
+    <td style="width:36px;text-align:center"></td>
+    <td style="width:28px;text-align:center">Hari</td>
+    <td colspan="2" rowspan="3" style="padding:4px 8px;vertical-align:top"></td>
+  </tr>
+  <tr>
+    <td>Ijin</td><td style="text-align:center"></td><td style="text-align:center">Hari</td>
+  </tr>
+  <tr>
+    <td>Tanpa Keterangan</td><td style="text-align:center"></td><td style="text-align:center">Hari</td>
+  </tr>
+</table>
+
+<table class="sign">
+  <tr>
+    <td style="width:33%">
+      Mengetahui,<br>Orang tua/Wali,
+      <br><br><br><br>
+      <span class="uline">…………………………………….</span>
+    </td>
+    <td style="width:34%">
+      Kota Tarakan, _____________ 2026<br>Wali Kelas,
+      <br><br><br><br>
+      <span class="uline">______________________</span>
+    </td>
+    <td style="width:33%">
+      Mengetahui,<br>Kepala Madrasah,
+      <br><br><br><br>
+      <span class="uline">HARMIN, S.Pd</span>
+    </td>
+  </tr>
+</table>
+</div>`;
 }
 
 // ─── MODAL HELPERS ────────────────────────────────────

@@ -3993,6 +3993,18 @@ function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, nam
     return vals.reduce((a, b) => a + b, 0) / vals.length;
   }
 
+  const allNilaiVals = Object.values(nilaiSiswa).map(n => n?.nilaiRapor).filter(v => v != null);
+  const rataRataKeseluruhan = allNilaiVals.length ? allNilaiVals.reduce((a, b) => a + b, 0) / allNilaiVals.length : null;
+  const hurufKeseluruhan = getNilaiHuruf(rataRataKeseluruhan);
+  const CATATAN_MAP = {
+    A: 'Prestasi luar biasa, terus pertahankan semangat belajar dan jadilah teladan bagi teman-teman.',
+    B: 'Sudah baik, tingkatkan sedikit lagi usaha agar semakin berkembang dan mencapai hasil terbaik.',
+    C: 'Cukup baik, dengan lebih rajin berlatih dan belajar pasti bisa naik ke tingkat yang lebih tinggi.',
+    D: 'Masih perlu banyak usaha, jangan menyerah karena setiap langkah kecil akan membawa pada kemajuan besar.',
+    E: 'Belum optimal, jadikan ini motivasi untuk bangkit dan berusaha lebih giat demi masa depan yang lebih cerah.',
+  };
+  const catatanOtomatis = CATATAN_MAP[hurufKeseluruhan] || '';
+
   const spiritualAvg   = calcSikapAvg(SPIRITUAL_MAPEL);
   const sosialAvg      = calcSikapAvg(SOSIAL_MAPEL);
   const spiritualHuruf = getNilaiHuruf(spiritualAvg);
@@ -4106,15 +4118,15 @@ ${kopHtml}
   </tr>
   <tr>
     <td style="width:110px">Sakit</td>
-    <td style="width:36px;text-align:center"></td>
+    <td style="width:36px;text-align:center">0</td>
     <td style="width:28px;text-align:center">Hari</td>
-    <td colspan="2" rowspan="3" style="padding:4px 8px;vertical-align:top"></td>
+    <td colspan="2" rowspan="3" style="padding:4px 8px;vertical-align:top">${catatanOtomatis}</td>
   </tr>
   <tr>
-    <td>Ijin</td><td style="text-align:center"></td><td style="text-align:center">Hari</td>
+    <td>Ijin</td><td style="text-align:center">0</td><td style="text-align:center">Hari</td>
   </tr>
   <tr>
-    <td>Tanpa Keterangan</td><td style="text-align:center"></td><td style="text-align:center">Hari</td>
+    <td>Tanpa Keterangan</td><td style="text-align:center">0</td><td style="text-align:center">Hari</td>
   </tr>
 </table>
 

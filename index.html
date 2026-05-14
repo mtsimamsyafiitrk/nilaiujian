@@ -1033,7 +1033,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Generate rapor lengkap per siswa dalam format PDF siap cetak.</p>
       <div class="form-group">
         <label>Pilih Kelas</label>
-        <select id="export-rapor-kelas" onchange="loadWaliKelasExport()">
+        <select id="export-rapor-kelas" onchange="loadRaporExportSettings()">
           <option value="">-- Pilih Kelas --</option>
         </select>
       </div>
@@ -1061,10 +1061,9 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       </div>
       <div class="form-group" id="wali-kelas-export-group" style="display:none;">
         <label>Wali Kelas <span style="font-size:11px;color:var(--text3);">(muncul di tanda tangan rapor)</span></label>
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="wali-kelas-export-nama" placeholder="Nama wali kelas..." style="flex:1;">
-          <button class="btn btn-outline btn-sm" onclick="saveWaliKelasExport()">Simpan</button>
-        </div>
+        <select id="wali-kelas-export-select">
+          <option value="">-- Pilih Wali Kelas --</option>
+        </select>
       </div>
 
       <!-- Tanda tangan online -->
@@ -1099,6 +1098,9 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
         <p style="font-size:11px;color:var(--text3);margin-top:8px;">Gunakan gambar PNG transparan untuk hasil terbaik. Maks 300KB.</p>
       </div>
 
+      <button class="btn btn-outline btn-full" style="margin-bottom:8px;" onclick="saveRaporExportSettings()">
+        💾 Simpan Pengaturan Rapor
+      </button>
       <button class="btn btn-primary btn-full" onclick="exportRaporPDF()">
         📄 Buka Rapor PDF
       </button>
@@ -3905,29 +3907,71 @@ function clearTtd(who) {
   if (fi) fi.value = '';
 }
 
-async function loadWaliKelasExport() {
+async function loadRaporExportSettings() {
   const kelas = document.getElementById('export-rapor-kelas').value;
-  const grp = document.getElementById('wali-kelas-export-group');
-  const inp = document.getElementById('wali-kelas-export-nama');
+  const grp   = document.getElementById('wali-kelas-export-group');
   if (!kelas) { grp.style.display = 'none'; return; }
   grp.style.display = 'block';
-  inp.value = '';
+
+  // Populate guru dropdown
+  const sel = document.getElementById('wali-kelas-export-select');
+  sel.innerHTML = '<option value="">-- Pilih Wali Kelas --</option>';
   try {
-    const doc = await db.collection('settings').doc(`waliKelas_${kelas}`).get();
-    if (doc.exists) inp.value = doc.data().namaWaliKelas || '';
+    const snap = await db.collection('users').where('role', '==', 'guru').orderBy('nama').get();
+    snap.docs.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.data().nama || d.id;
+      sel.appendChild(opt);
+    });
+  } catch (_) {}
+
+  // Load saved settings for this kelas
+  try {
+    const doc = await db.collection('settings').doc(`raporExport_${kelas}`).get();
+    if (!doc.exists) return;
+    const d = doc.data();
+    if (d.tanggal) document.getElementById('rapor-tanggal').value = d.tanggal;
+    if (d.bulan)   document.getElementById('rapor-bulan').value   = d.bulan;
+    if (d.tahun)   document.getElementById('rapor-tahun').value   = d.tahun;
+    if (d.waliKelasUid) sel.value = d.waliKelasUid;
+    const toggle = document.getElementById('ttd-online-toggle');
+    if (d.useTtd) {
+      toggle.checked = true;
+      document.getElementById('ttd-online-section').style.display = 'block';
+    }
+    if (d.ttdWali) {
+      ttdStore.wali = d.ttdWali;
+      document.getElementById('ttd-wali-preview').innerHTML =
+        `<img src="${d.ttdWali}" style="max-width:100%;max-height:60px;object-fit:contain;">`;
+    }
+    if (d.ttdKepsek) {
+      ttdStore.kepsek = d.ttdKepsek;
+      document.getElementById('ttd-kepsek-preview').innerHTML =
+        `<img src="${d.ttdKepsek}" style="max-width:100%;max-height:60px;object-fit:contain;">`;
+    }
   } catch (_) {}
 }
 
-async function saveWaliKelasExport() {
+async function saveRaporExportSettings() {
   const kelas = document.getElementById('export-rapor-kelas').value;
-  if (!kelas) return;
-  const nama = (document.getElementById('wali-kelas-export-nama')?.value || '').trim();
+  if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
+  const sel    = document.getElementById('wali-kelas-export-select');
+  const useTtd = document.getElementById('ttd-online-toggle').checked;
+  const data = {
+    tanggal:      (document.getElementById('rapor-tanggal')?.value || '').trim(),
+    bulan:        (document.getElementById('rapor-bulan')?.value   || '').trim(),
+    tahun:        (document.getElementById('rapor-tahun')?.value   || '').trim(),
+    waliKelasUid: sel.value || '',
+    namaWaliKelas: sel.selectedIndex > 0 ? sel.options[sel.selectedIndex].textContent : '',
+    useTtd,
+    ttdWali:   useTtd ? (ttdStore.wali   || '') : '',
+    ttdKepsek: useTtd ? (ttdStore.kepsek || '') : '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
   try {
-    await db.collection('settings').doc(`waliKelas_${kelas}`).set({
-      namaWaliKelas: nama,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-    showToast('Wali kelas disimpan ✓', 'success');
+    await db.collection('settings').doc(`raporExport_${kelas}`).set(data);
+    showToast('Pengaturan rapor disimpan ✓', 'success');
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
@@ -3991,13 +4035,10 @@ async function exportRaporPDF() {
       if (kopDoc.exists) { kop = { ...KOP_DEFAULTS, ...kopDoc.data() }; kopCache = kop; }
     } catch (_) {}
 
-    let namaWaliKelas = (document.getElementById('wali-kelas-export-nama')?.value || '').trim();
-    if (!namaWaliKelas) {
-      try {
-        const wkDoc = await db.collection('settings').doc(`waliKelas_${kelas}`).get();
-        if (wkDoc.exists) namaWaliKelas = wkDoc.data().namaWaliKelas || '';
-      } catch (_) {}
-    }
+    // Baca wali kelas dari dropdown guru
+    const wkSel = document.getElementById('wali-kelas-export-select');
+    const namaWaliKelas = wkSel && wkSel.selectedIndex > 0
+      ? wkSel.options[wkSel.selectedIndex].textContent : '';
 
     const tgl   = (document.getElementById('rapor-tanggal')?.value || '').trim();
     const bulan = (document.getElementById('rapor-bulan')?.value   || '').trim();

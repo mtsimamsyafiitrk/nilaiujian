@@ -1029,139 +1029,143 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       </div>
     </div>
     <div class="card card-body">
-      <h4 style="font-size:13px;font-weight:700;margin-bottom:12px;">📄 Export Rapor PDF (Per Siswa)</h4>
+      <h4 style="font-size:13px;font-weight:700;margin-bottom:4px;">📄 Export Rapor PDF (Per Siswa)</h4>
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Generate rapor lengkap per siswa dalam format PDF siap cetak.</p>
+
+      <!-- Pilih Kelas di atas editor -->
       <div class="form-group">
         <label>Pilih Kelas</label>
         <select id="export-rapor-kelas" onchange="loadRaporExportSettings()">
           <option value="">-- Pilih Kelas --</option>
         </select>
       </div>
-      <div class="form-group">
-        <label>Tanggal Keluar Rapor</label>
-        <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;">
-          <input type="number" id="rapor-tanggal" min="1" max="31" placeholder="Tgl" style="text-align:center;">
-          <select id="rapor-bulan">
-            <option value="">-- Bulan --</option>
-            <option value="Januari">Januari</option>
-            <option value="Februari">Februari</option>
-            <option value="Maret">Maret</option>
-            <option value="April">April</option>
-            <option value="Mei">Mei</option>
-            <option value="Juni">Juni</option>
-            <option value="Juli">Juli</option>
-            <option value="Agustus">Agustus</option>
-            <option value="September">September</option>
-            <option value="Oktober">Oktober</option>
-            <option value="November">November</option>
-            <option value="Desember">Desember</option>
-          </select>
-          <input type="number" id="rapor-tahun" min="2020" max="2099" placeholder="Tahun" style="text-align:center;">
-        </div>
-      </div>
-      <!-- Tanda tangan online -->
-      <div class="form-group">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-          <input type="checkbox" id="ttd-online-toggle" style="width:16px;height:16px;accent-color:var(--teal);"
-            onchange="document.getElementById('ttd-online-section').style.display=this.checked?'block':'none';">
-          Gunakan Tanda Tangan Online
-        </label>
-      </div>
-      <div id="ttd-online-section" style="display:none;">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div>
-            <p style="font-size:12px;font-weight:700;margin-bottom:6px;">✍️ TTD Wali Kelas</p>
-            <div id="ttd-wali-preview" style="width:100%;height:64px;border:1.5px dashed var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);overflow:hidden;margin-bottom:6px;">Belum diupload</div>
-            <input type="file" id="ttd-wali-file" accept="image/*" style="display:none;" onchange="handleTtdUpload('wali',event)">
-            <div style="display:flex;gap:6px;">
-              <button class="btn btn-outline btn-sm" style="flex:1;" onclick="document.getElementById('ttd-wali-file').click()">Upload</button>
-              <button class="btn btn-ghost btn-sm" onclick="clearTtd('wali')">Hapus</button>
-            </div>
-          </div>
-          <div>
-            <p style="font-size:12px;font-weight:700;margin-bottom:6px;">✍️ TTD Kepala Madrasah</p>
-            <div id="ttd-kepsek-preview" style="width:100%;height:64px;border:1.5px dashed var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);overflow:hidden;margin-bottom:6px;">Belum diupload</div>
-            <input type="file" id="ttd-kepsek-file" accept="image/*" style="display:none;" onchange="handleTtdUpload('kepsek',event)">
-            <div style="display:flex;gap:6px;">
-              <button class="btn btn-outline btn-sm" style="flex:1;" onclick="document.getElementById('ttd-kepsek-file').click()">Upload</button>
-              <button class="btn btn-ghost btn-sm" onclick="clearTtd('kepsek')">Hapus</button>
-            </div>
-          </div>
-        </div>
-        <p style="font-size:11px;color:var(--text3);margin-top:8px;">Gunakan gambar PNG transparan untuk hasil terbaik. Maks 300KB.</p>
-      </div>
 
-      <button class="btn btn-outline btn-full" style="margin-bottom:8px;" onclick="saveRaporExportSettings()">
-        💾 Simpan Pengaturan Rapor
-      </button>
-      <button class="btn btn-primary btn-full" onclick="exportRaporPDF()">
-        📄 Buka Rapor PDF
-      </button>
-    </div>
-
-    <!-- Kop Sekolah Editor -->
-    <div class="card card-body" style="margin-top:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleKopEditor()">
-        <h4 style="font-size:13px;font-weight:700;">🏫 Pengaturan Kop Sekolah</h4>
-        <span id="kop-editor-toggle" style="font-size:12px;color:var(--text2);">▼ Buka</span>
-      </div>
-      <div id="kop-editor-body" style="display:none;margin-top:12px;">
-        <!-- Logo upload -->
-        <div class="form-group">
-          <label style="font-size:12px;font-weight:700;">Logo Sekolah</label>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
-            <div id="kop-logo-preview" style="width:60px;height:60px;border:1.5px dashed var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);overflow:hidden;flex-shrink:0;">Logo</div>
-            <div>
-              <input type="file" id="kop-logo-file" accept="image/*" style="display:none;" onchange="handleLogoUpload(event)">
-              <button class="btn btn-outline btn-sm" onclick="document.getElementById('kop-logo-file').click()">Upload Logo</button>
-              <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="clearLogoKop()">Hapus</button>
-              <p style="font-size:11px;color:var(--text3);margin-top:4px;">PNG/JPG, maks 500KB</p>
+      <!-- Editor Identitas (collapsible) -->
+      <div style="border-top:1px solid var(--border2);margin-top:8px;padding-top:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleEditorIdentitas()">
+          <h4 style="font-size:13px;font-weight:700;">🖊️ Editor Identitas</h4>
+          <span id="kop-editor-toggle" style="font-size:12px;color:var(--text2);">▼ Buka</span>
+        </div>
+        <div id="kop-editor-body" style="display:none;margin-top:12px;">
+          <!-- Kop Sekolah -->
+          <div class="form-group">
+            <label style="font-size:12px;font-weight:700;">Logo Sekolah</label>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+              <div id="kop-logo-preview" style="width:60px;height:60px;border:1.5px dashed var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);overflow:hidden;flex-shrink:0;">Logo</div>
+              <div>
+                <input type="file" id="kop-logo-file" accept="image/*" style="display:none;" onchange="handleLogoUpload(event)">
+                <button class="btn btn-outline btn-sm" onclick="document.getElementById('kop-logo-file').click()">Upload Logo</button>
+                <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="clearLogoKop()">Hapus</button>
+                <p style="font-size:11px;color:var(--text3);margin-top:4px;">PNG/JPG, maks 500KB</p>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="form-group">
-          <label>Nama Yayasan</label>
-          <input type="text" id="kop-yayasan" placeholder="YAYASAN AL IMAM ASY-SYAFI'I TARAKAN">
-        </div>
-        <div class="form-group">
-          <label>Nama Pesantren</label>
-          <input type="text" id="kop-pesantren" placeholder="PESANTREN AL IMAM ASY-SYAFI'I TARAKAN">
-        </div>
-        <div class="form-group">
-          <label>Nama Madrasah</label>
-          <input type="text" id="kop-sekolah" placeholder="MTs AL IMAM ASY-SYAFI'I TARAKAN">
-        </div>
-        <div class="form-group">
-          <label>Teks Arab / Sub Judul</label>
-          <input type="text" id="kop-arabic" placeholder="مدرسةالثانوية...">
-        </div>
-        <div class="form-group">
-          <label>Alamat Lengkap</label>
-          <input type="text" id="kop-alamat" placeholder="Jalan Swaran Jaya RT.15 Juata Permai, Tarakan Telp. +62 ...">
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input type="text" id="kop-email" placeholder="mtsimamsyafiitrk@gmail.com">
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div class="form-group" style="margin-bottom:0;">
-            <label>NSM</label>
-            <input type="text" id="kop-nsm" placeholder="121265710005">
+          <div class="form-group">
+            <label>Nama Yayasan</label>
+            <input type="text" id="kop-yayasan" placeholder="YAYASAN AL IMAM ASY-SYAFI'I TARAKAN">
           </div>
-          <div class="form-group" style="margin-bottom:0;">
-            <label>NPSN</label>
-            <input type="text" id="kop-npsn" placeholder="70033661">
+          <div class="form-group">
+            <label>Nama Pesantren</label>
+            <input type="text" id="kop-pesantren" placeholder="PESANTREN AL IMAM ASY-SYAFI'I TARAKAN">
           </div>
+          <div class="form-group">
+            <label>Nama Madrasah</label>
+            <input type="text" id="kop-sekolah" placeholder="MTs AL IMAM ASY-SYAFI'I TARAKAN">
+          </div>
+          <div class="form-group">
+            <label>Teks Arab / Sub Judul</label>
+            <input type="text" id="kop-arabic" placeholder="مدرسةالثانوية...">
+          </div>
+          <div class="form-group">
+            <label>Alamat Lengkap</label>
+            <input type="text" id="kop-alamat" placeholder="Jalan Swaran Jaya RT.15 Juata Permai, Tarakan Telp. +62 ...">
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="text" id="kop-email" placeholder="mtsimamsyafiitrk@gmail.com">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label>NSM</label>
+              <input type="text" id="kop-nsm" placeholder="121265710005">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>NPSN</label>
+              <input type="text" id="kop-npsn" placeholder="70033661">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Nama Kepala Madrasah</label>
+            <input type="text" id="kop-kepsek" placeholder="HARMIN, S.Pd">
+          </div>
+          <div class="form-group">
+            <label>Kota (untuk tanda tangan)</label>
+            <input type="text" id="kop-kota" placeholder="Kota Tarakan">
+          </div>
+
+          <!-- Tanggal Keluar Rapor -->
+          <div class="form-group" style="margin-top:4px;">
+            <label>Tanggal Keluar Rapor</label>
+            <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;">
+              <input type="number" id="rapor-tanggal" min="1" max="31" placeholder="Tgl" style="text-align:center;">
+              <select id="rapor-bulan">
+                <option value="">-- Bulan --</option>
+                <option value="Januari">Januari</option>
+                <option value="Februari">Februari</option>
+                <option value="Maret">Maret</option>
+                <option value="April">April</option>
+                <option value="Mei">Mei</option>
+                <option value="Juni">Juni</option>
+                <option value="Juli">Juli</option>
+                <option value="Agustus">Agustus</option>
+                <option value="September">September</option>
+                <option value="Oktober">Oktober</option>
+                <option value="November">November</option>
+                <option value="Desember">Desember</option>
+              </select>
+              <input type="number" id="rapor-tahun" min="2020" max="2099" placeholder="Tahun" style="text-align:center;">
+            </div>
+          </div>
+
+          <!-- Tanda tangan online -->
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ttd-online-toggle" style="width:16px;height:16px;accent-color:var(--teal);"
+                onchange="document.getElementById('ttd-online-section').style.display=this.checked?'block':'none';">
+              Gunakan Tanda Tangan Online
+            </label>
+          </div>
+          <div id="ttd-online-section" style="display:none;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <p style="font-size:12px;font-weight:700;margin-bottom:6px;">✍️ TTD Wali Kelas</p>
+                <div id="ttd-wali-preview" style="width:100%;height:64px;border:1.5px dashed var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);overflow:hidden;margin-bottom:6px;">Belum diupload</div>
+                <input type="file" id="ttd-wali-file" accept="image/*" style="display:none;" onchange="handleTtdUpload('wali',event)">
+                <div style="display:flex;gap:6px;">
+                  <button class="btn btn-outline btn-sm" style="flex:1;" onclick="document.getElementById('ttd-wali-file').click()">Upload</button>
+                  <button class="btn btn-ghost btn-sm" onclick="clearTtd('wali')">Hapus</button>
+                </div>
+              </div>
+              <div>
+                <p style="font-size:12px;font-weight:700;margin-bottom:6px;">✍️ TTD Kepala Madrasah</p>
+                <div id="ttd-kepsek-preview" style="width:100%;height:64px;border:1.5px dashed var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);overflow:hidden;margin-bottom:6px;">Belum diupload</div>
+                <input type="file" id="ttd-kepsek-file" accept="image/*" style="display:none;" onchange="handleTtdUpload('kepsek',event)">
+                <div style="display:flex;gap:6px;">
+                  <button class="btn btn-outline btn-sm" style="flex:1;" onclick="document.getElementById('ttd-kepsek-file').click()">Upload</button>
+                  <button class="btn btn-ghost btn-sm" onclick="clearTtd('kepsek')">Hapus</button>
+                </div>
+              </div>
+            </div>
+            <p style="font-size:11px;color:var(--text3);margin-top:8px;">Gunakan gambar PNG transparan untuk hasil terbaik. Maks 300KB.</p>
+          </div>
+
+          <button class="btn btn-outline btn-full" style="margin-bottom:8px;margin-top:8px;" onclick="saveKopSettings(); saveRaporExportSettings();">
+            💾 Simpan Editor Identitas
+          </button>
+          <button class="btn btn-primary btn-full" onclick="exportRaporPDF()">
+            📄 Buka Rapor PDF
+          </button>
         </div>
-        <div class="form-group">
-          <label>Nama Kepala Madrasah</label>
-          <input type="text" id="kop-kepsek" placeholder="HARMIN, S.Pd">
-        </div>
-        <div class="form-group">
-          <label>Kota (untuk tanda tangan)</label>
-          <input type="text" id="kop-kota" placeholder="Kota Tarakan">
-        </div>
-        <button class="btn btn-primary btn-full" onclick="saveKopSettings()">Simpan Pengaturan Kop</button>
       </div>
     </div>
   </div>
@@ -3799,7 +3803,7 @@ const KOP_DEFAULTS = {
 
 let kopCache = null;
 
-function toggleKopEditor() {
+function toggleEditorIdentitas() {
   const body = document.getElementById('kop-editor-body');
   const toggle = document.getElementById('kop-editor-toggle');
   const open = body.style.display === 'none';

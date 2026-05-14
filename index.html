@@ -1163,7 +1163,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
             <p style="font-size:11px;color:var(--text3);margin-top:8px;">Gunakan gambar PNG transparan untuk hasil terbaik. Maks 300KB.</p>
           </div>
 
-          <button class="btn btn-outline btn-full" style="margin-bottom:8px;margin-top:8px;" onclick="saveKopSettings(); saveRaporExportSettings();">
+          <button class="btn btn-outline btn-full" style="margin-bottom:8px;margin-top:8px;" onclick="saveEditorIdentitas()">
             💾 Simpan Editor Identitas
           </button>
         </div>
@@ -3859,7 +3859,12 @@ function clearLogoKop() {
   if (fi) fi.value = '';
 }
 
-async function saveKopSettings() {
+async function saveEditorIdentitas() {
+  await Promise.all([saveKopSettings(true), saveRaporExportSettings(true)]);
+  showToast('Pengaturan disimpan ✓', 'success');
+}
+
+async function saveKopSettings(silent = false) {
   const g = id => (document.getElementById(id)?.value || '').trim();
   const data = {
     yayasan:   g('kop-yayasan')   || KOP_DEFAULTS.yayasan,
@@ -3878,7 +3883,7 @@ async function saveKopSettings() {
   try {
     await db.collection('settings').doc('kopSekolah').set(data);
     kopCache = { ...data };
-    showToast('Pengaturan kop disimpan ✓', 'success');
+    if (!silent) showToast('Pengaturan kop disimpan ✓', 'success');
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
@@ -3933,7 +3938,7 @@ async function loadRaporExportSettings() {
   } catch (_) {}
 }
 
-async function saveRaporExportSettings() {
+async function saveRaporExportSettings(silent = false) {
   const kelas = document.getElementById('export-rapor-kelas').value;
   const docKey = kelas ? `raporExport_${kelas}` : 'raporExport_default';
   const useTtd = document.getElementById('ttd-online-toggle').checked;
@@ -3948,7 +3953,7 @@ async function saveRaporExportSettings() {
   };
   try {
     await db.collection('settings').doc(docKey).set(data);
-    showToast('Pengaturan rapor disimpan ✓', 'success');
+    if (!silent) showToast('Pengaturan rapor disimpan ✓', 'success');
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 

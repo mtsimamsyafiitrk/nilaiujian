@@ -4220,17 +4220,21 @@ ${kopHtml}
   <tr>
     <td style="width:33%">
       Mengetahui,<br>Orang tua/Wali,
-      <br><br><br><br>
+      <div style="height:62px;"></div>
       <span class="uline">…………………………………….</span>
     </td>
     <td style="width:34%">
       ${K.kota}, ${tanggalRapor}<br>Wali Kelas,
-      ${ttdWali ? `<br><img src="${ttdWali}" style="height:52px;max-width:140px;object-fit:contain;display:block;margin:2px auto;">` : '<br><br><br><br>'}
+      <div style="height:62px;display:flex;align-items:flex-end;justify-content:center;">
+        ${ttdWali ? `<img src="${ttdWali}" style="height:52px;max-width:140px;object-fit:contain;">` : ''}
+      </div>
       <span class="uline">${namaWaliKelas || '______________________'}</span>
     </td>
     <td style="width:33%">
       Mengetahui,<br>Kepala Madrasah,
-      ${ttdKepsek ? `<br><img src="${ttdKepsek}" style="height:52px;max-width:140px;object-fit:contain;display:block;margin:2px auto;">` : '<br><br><br><br>'}
+      <div style="height:62px;display:flex;align-items:flex-end;justify-content:center;">
+        ${ttdKepsek ? `<img src="${ttdKepsek}" style="height:52px;max-width:140px;object-fit:contain;">` : ''}
+      </div>
       <span class="uline">${K.kepsek}</span>
     </td>
   </tr>

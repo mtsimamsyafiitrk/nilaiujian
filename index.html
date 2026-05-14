@@ -4415,8 +4415,9 @@ async function loadRombelTab() {
     }
     let guruList = [];
     try {
-      const gSnap = await db.collection('users').where('role', '==', 'guru').orderBy('nama').get();
-      guruList = gSnap.docs.map(d => ({ id: d.id, nama: d.data().nama || d.id }));
+      const gSnap = await db.collection('users').where('role', '==', 'guru').get();
+      guruList = gSnap.docs.map(d => ({ id: d.id, nama: d.data().nama || d.id }))
+                           .sort((a, b) => a.nama.localeCompare(b.nama));
     } catch (_) {}
 
     container.innerHTML = '';

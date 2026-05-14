@@ -1794,7 +1794,7 @@ function switchTab(tab) {
   if (tab === 'mapel') loadMapelTab();
   if (tab === 'dashboard') loadAdminDashboard();
   if (tab === 'nilai') { populateMapelSelect('admin-mapel-select'); populateKelasSelect('admin-kelas-select'); }
-  if (tab === 'export') { populateMapelSelect('export-mapel-select'); populateKelasSelect('export-kelas-select'); populateKelasSelect('export-rapor-kelas', '-- Pilih Kelas --'); }
+  if (tab === 'export') { populateMapelSelect('export-mapel-select'); populateKelasSelect('export-kelas-select'); populateKelasSelect('export-rapor-kelas', '-- Pilih Kelas --', (val) => { if (val) loadRaporExportSettings(); }); }
   if (tab === 'pengaturan') loadSettingsTab();
 }
 
@@ -2797,15 +2797,16 @@ async function getMapelSettings(mapelId, kelasId = null) {
   return { ...SETTINGS_FALLBACK };
 }
 
-function populateKelasSelect(selectId, emptyLabel = 'Semua Kelas') {
+function populateKelasSelect(selectId, emptyLabel = 'Semua Kelas', afterPopulate = null) {
   getAllSiswa().then(all => {
     const kelasList = [...new Set(all.map(s => s.kelas))].sort();
     const sel = document.getElementById(selectId);
     if (!sel) return;
-    const prev = sel.value;
+    const prev = sel.value || localStorage.getItem(`lastKelas_${selectId}`) || '';
     sel.innerHTML = `<option value="">${emptyLabel}</option>`;
     kelasList.forEach(k => sel.innerHTML += `<option value="${k}">${k}</option>`);
     if (prev) sel.value = prev;
+    if (afterPopulate) afterPopulate(sel.value);
   });
 }
 
@@ -3913,6 +3914,7 @@ function clearTtd(who) {
 async function loadRaporExportSettings() {
   const kelas = document.getElementById('export-rapor-kelas').value;
   if (!kelas) return;
+  localStorage.setItem('lastKelas_export-rapor-kelas', kelas);
   try {
     const doc = await db.collection('settings').doc(`raporExport_${kelas}`).get();
     if (!doc.exists) return;
@@ -4139,7 +4141,7 @@ function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, nam
       <div style="font-size:14pt;font-weight:bold;">${K.sekolah}</div>
       <div style="font-size:8pt;font-style:italic;">${K.arabic}</div>
       <div style="font-size:8pt;">${K.alamat}</div>
-      <div style="font-size:8pt;">E-mail: <u>${K.email}</u></div>
+      <div style="font-size:8pt;">E-mail: ${K.email}</div>
     </td>
   </tr>
 </table>

@@ -1794,7 +1794,7 @@ function switchTab(tab) {
   if (tab === 'mapel') loadMapelTab();
   if (tab === 'dashboard') loadAdminDashboard();
   if (tab === 'nilai') { populateMapelSelect('admin-mapel-select'); populateKelasSelect('admin-kelas-select'); }
-  if (tab === 'export') { populateMapelSelect('export-mapel-select'); populateKelasSelect('export-kelas-select'); populateKelasSelect('export-rapor-kelas', '-- Pilih Kelas --', (val) => { if (val) loadRaporExportSettings(); }); }
+  if (tab === 'export') { populateMapelSelect('export-mapel-select'); populateKelasSelect('export-kelas-select'); populateKelasSelect('export-rapor-kelas', '-- Pilih Kelas --', (val) => { if (val) loadRaporExportSettings(); }); loadGlobalRaporSettings(); }
   if (tab === 'pengaturan') loadSettingsTab();
 }
 
@@ -3911,12 +3911,9 @@ function clearTtd(who) {
   if (fi) fi.value = '';
 }
 
-async function loadRaporExportSettings() {
-  const kelas = document.getElementById('export-rapor-kelas').value;
-  if (!kelas) return;
-  localStorage.setItem('lastKelas_export-rapor-kelas', kelas);
+async function loadGlobalRaporSettings() {
   try {
-    const doc = await db.collection('settings').doc(`raporExport_${kelas}`).get();
+    const doc = await db.collection('settings').doc('raporExport_global').get();
     if (!doc.exists) return;
     const d = doc.data();
     if (d.tanggal) document.getElementById('rapor-tanggal').value = d.tanggal;
@@ -3940,9 +3937,12 @@ async function loadRaporExportSettings() {
   } catch (_) {}
 }
 
-async function saveRaporExportSettings(silent = false) {
+async function loadRaporExportSettings() {
   const kelas = document.getElementById('export-rapor-kelas').value;
-  const docKey = kelas ? `raporExport_${kelas}` : 'raporExport_default';
+  if (kelas) localStorage.setItem('lastKelas_export-rapor-kelas', kelas);
+}
+
+async function saveRaporExportSettings(silent = false) {
   const useTtd = document.getElementById('ttd-online-toggle').checked;
   const data = {
     tanggal: (document.getElementById('rapor-tanggal')?.value || '').trim(),
@@ -3954,7 +3954,7 @@ async function saveRaporExportSettings(silent = false) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
   try {
-    await db.collection('settings').doc(docKey).set(data);
+    await db.collection('settings').doc('raporExport_global').set(data);
     if (!silent) showToast('Pengaturan rapor disimpan ✓', 'success');
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }

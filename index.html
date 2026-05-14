@@ -1037,6 +1037,28 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
           <option value="">-- Pilih Kelas --</option>
         </select>
       </div>
+      <div class="form-group">
+        <label>Tanggal Keluar Rapor</label>
+        <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;">
+          <input type="number" id="rapor-tanggal" min="1" max="31" placeholder="Tgl" style="text-align:center;">
+          <select id="rapor-bulan">
+            <option value="">-- Bulan --</option>
+            <option value="Januari">Januari</option>
+            <option value="Februari">Februari</option>
+            <option value="Maret">Maret</option>
+            <option value="April">April</option>
+            <option value="Mei">Mei</option>
+            <option value="Juni">Juni</option>
+            <option value="Juli">Juli</option>
+            <option value="Agustus">Agustus</option>
+            <option value="September">September</option>
+            <option value="Oktober">Oktober</option>
+            <option value="November">November</option>
+            <option value="Desember">Desember</option>
+          </select>
+          <input type="number" id="rapor-tahun" min="2020" max="2099" placeholder="Tahun" style="text-align:center;">
+        </div>
+      </div>
       <div class="form-group" id="wali-kelas-export-group" style="display:none;">
         <label>Wali Kelas <span style="font-size:11px;color:var(--text3);">(muncul di tanda tangan rapor)</span></label>
         <div style="display:flex;gap:8px;">
@@ -3921,7 +3943,12 @@ async function exportRaporPDF() {
       } catch (_) {}
     }
 
-    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}, sikapSettings, kop, namaWaliKelas));
+    const tgl   = (document.getElementById('rapor-tanggal')?.value || '').trim();
+    const bulan = (document.getElementById('rapor-bulan')?.value   || '').trim();
+    const tahun = (document.getElementById('rapor-tahun')?.value   || '').trim();
+    const tanggalRapor = (tgl && bulan && tahun) ? `${tgl} ${bulan} ${tahun}` : '_____________';
+
+    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}, sikapSettings, kop, namaWaliKelas, tanggalRapor));
     const html = `<!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8">
 <title>Rapor ${kelas} - 2025/2026</title>
@@ -3955,7 +3982,7 @@ ${pages.join('\n')}
   }
 }
 
-function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, namaWaliKelas = '') {
+function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, namaWaliKelas = '', tanggalRapor = '_____________') {
   const K = { ...KOP_DEFAULTS, ...kop };
   const SPIRITUAL_MAPEL = ['ALQURAN_HADIS', 'TAUHID', 'FIKIH', 'SKI', 'BAHASA_ARAB'];
   const SOSIAL_MAPEL    = ['PPKN', 'IPS', 'IPA', 'PRAKARYA', 'KHOT', 'BAHASA_INDONESIA', 'BAHASA_INGGRIS'];
@@ -4099,7 +4126,7 @@ ${kopHtml}
       <span class="uline">…………………………………….</span>
     </td>
     <td style="width:34%">
-      ${K.kota}, _____________ 2026<br>Wali Kelas,
+      ${K.kota}, ${tanggalRapor}<br>Wali Kelas,
       <br><br><br><br>
       <span class="uline">${namaWaliKelas || '______________________'}</span>
     </td>

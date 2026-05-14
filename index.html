@@ -1121,6 +1121,35 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       </div>
       <div style="margin-top:14px;" id="mapel-overrides-list"></div>
     </div>
+
+    <!-- Deskripsi Sikap per Kelas -->
+    <div class="card card-body" style="margin-top:12px;">
+      <h4 style="font-size:13px;font-weight:700;margin-bottom:14px;">🤲 Deskripsi Nilai Sikap per Kelas</h4>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Teks materi untuk generate deskripsi Sikap Spiritual &amp; Sosial di rapor. Predikat dihitung otomatis dari rata-rata nilai mapel terkait.</p>
+      <div class="form-group">
+        <label>Pilih Kelas</label>
+        <select id="sikap-kelas-select" onchange="loadSikapSettingsForm()">
+          <option value="">-- Pilih Kelas --</option>
+        </select>
+      </div>
+      <div id="sikap-settings-form" style="display:none;">
+        <div class="form-group">
+          <label style="font-size:12px;font-weight:700;">🕌 Materi Sikap Spiritual</label>
+          <p style="font-size:11px;color:var(--text3);margin-bottom:4px;">Rata-rata dari: Al-Qur'an Hadis, Akidah Akhlak, Fikih, SKI, Bahasa Arab</p>
+          <textarea id="sikap-spiritual-deskripsi" rows="2"
+            placeholder="Contoh: ketaqwaan, ibadah harian, membaca Al-Qur'an, akhlak mulia..."
+            style="width:100%;font-size:12px;padding:8px;border:1.5px solid var(--border);border-radius:8px;resize:vertical;font-family:inherit;"></textarea>
+        </div>
+        <div class="form-group">
+          <label style="font-size:12px;font-weight:700;">🌍 Materi Sikap Sosial</label>
+          <p style="font-size:11px;color:var(--text3);margin-bottom:4px;">Rata-rata dari: PPKn, IPS, IPA, Prakarya, Seni Budaya, Bahasa Indonesia, Bahasa Inggris</p>
+          <textarea id="sikap-sosial-deskripsi" rows="2"
+            placeholder="Contoh: kejujuran, kedisiplinan, tanggung jawab, kerja sama..."
+            style="width:100%;font-size:12px;padding:8px;border:1.5px solid var(--border);border-radius:8px;resize:vertical;font-family:inherit;"></textarea>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="saveSikapSettings()">Simpan Deskripsi Sikap</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2655,6 +2684,7 @@ function populateKelasSelect(selectId, emptyLabel = 'Semua Kelas') {
 async function loadSettingsTab() {
   populateMapelSelect('settings-mapel-select');
   populateKelasSelect('settings-kelas-select', '-- Semua Kelas (override mapel) --');
+  populateKelasSelect('sikap-kelas-select', '-- Pilih Kelas --');
   // Load default settings
   const def = await getMapelSettings('__none__'); // gets fallback or default doc
   const defDoc = settingsCache['default'] || SETTINGS_FALLBACK;
@@ -2807,6 +2837,36 @@ async function resetMapelSettings() {
     showToast('Override dihapus, kembali ke default ✓', 'success');
     loadMapelSettingsForm();
     renderMapelOverridesList();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function loadSikapSettingsForm() {
+  const kelas = document.getElementById('sikap-kelas-select').value;
+  const formEl = document.getElementById('sikap-settings-form');
+  if (!kelas) { formEl.style.display = 'none'; return; }
+  formEl.style.display = 'block';
+  try {
+    const doc = await db.collection('settings').doc(`sikap_${kelas}`).get();
+    document.getElementById('sikap-spiritual-deskripsi').value = doc.exists ? (doc.data().deskripsiSpiritual || '') : '';
+    document.getElementById('sikap-sosial-deskripsi').value   = doc.exists ? (doc.data().deskripsiSosial    || '') : '';
+  } catch (_) {
+    document.getElementById('sikap-spiritual-deskripsi').value = '';
+    document.getElementById('sikap-sosial-deskripsi').value   = '';
+  }
+}
+
+async function saveSikapSettings() {
+  const kelas = document.getElementById('sikap-kelas-select').value;
+  if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
+  const data = {
+    deskripsiSpiritual: document.getElementById('sikap-spiritual-deskripsi').value.trim(),
+    deskripsiSosial:    document.getElementById('sikap-sosial-deskripsi').value.trim(),
+    updatedBy: currentUser?.uid || '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    await db.collection('settings').doc(`sikap_${kelas}`).set(data);
+    showToast('Deskripsi sikap disimpan ✓', 'success');
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
@@ -3647,7 +3707,13 @@ async function exportRaporPDF() {
       nilaiByStudent[data.nomorPeserta][data.mapelId] = data;
     });
 
-    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}));
+    let sikapSettings = { deskripsiSpiritual: '', deskripsiSosial: '' };
+    try {
+      const sikapDoc = await db.collection('settings').doc(`sikap_${kelas}`).get();
+      if (sikapDoc.exists) sikapSettings = { deskripsiSpiritual: '', deskripsiSosial: '', ...sikapDoc.data() };
+    } catch (_) {}
+
+    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}, sikapSettings));
     const html = `<!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8">
 <title>Rapor ${kelas} - 2025/2026</title>
@@ -3681,7 +3747,23 @@ ${pages.join('\n')}
   }
 }
 
-function buildRaporPage(sw, kelas, nilaiSiswa) {
+function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}) {
+  const SPIRITUAL_MAPEL = ['ALQURAN_HADIS', 'TAUHID', 'FIKIH', 'SKI', 'BAHASA_ARAB'];
+  const SOSIAL_MAPEL    = ['PPKN', 'IPS', 'IPA', 'PRAKARYA', 'KHOT', 'BAHASA_INDONESIA', 'BAHASA_INGGRIS'];
+
+  function calcSikapAvg(mapelIds) {
+    const vals = mapelIds.map(id => nilaiSiswa[id]?.nilaiRapor).filter(v => v != null && v !== undefined);
+    if (!vals.length) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  }
+
+  const spiritualAvg   = calcSikapAvg(SPIRITUAL_MAPEL);
+  const sosialAvg      = calcSikapAvg(SOSIAL_MAPEL);
+  const spiritualHuruf = getNilaiHuruf(spiritualAvg);
+  const sosialHuruf    = getNilaiHuruf(sosialAvg);
+  const spiritualDesk  = getDeskripsiNilai(spiritualHuruf, sikapSettings.deskripsiSpiritual || '');
+  const sosialDesk     = getDeskripsiNilai(sosialHuruf,    sikapSettings.deskripsiSosial    || '');
+
   let nilaiRows = '';
   let deskRows = '';
   let deskIdx = 0;
@@ -3732,9 +3814,9 @@ function buildRaporPage(sw, kelas, nilaiSiswa) {
 <div class="sec">A. Nilai Sikap</div>
 <table class="b" style="margin-bottom:7px">
   <tr><th style="width:130px">1. Sikap Spiritual</th><th style="width:70px">PREDIKAT</th><th>DESKRIPSI NILAI SIKAP SPIRITUAL</th></tr>
-  <tr><td></td><td class="c"></td><td style="height:28px"></td></tr>
+  <tr><td></td><td class="c" style="font-weight:700;font-size:11pt">${spiritualHuruf !== '-' ? spiritualHuruf : ''}</td><td style="min-height:28px;padding:4px 5px">${spiritualDesk}</td></tr>
   <tr><th>2. Sikap Sosial</th><th>PREDIKAT</th><th>DESKRIPSI NILAI SIKAP SOSIAL</th></tr>
-  <tr><td></td><td class="c"></td><td style="height:28px"></td></tr>
+  <tr><td></td><td class="c" style="font-weight:700;font-size:11pt">${sosialHuruf !== '-' ? sosialHuruf : ''}</td><td style="min-height:28px;padding:4px 5px">${sosialDesk}</td></tr>
 </table>
 
 <div class="sec">B. Nilai Pengetahuan Dan Keterampilan</div>

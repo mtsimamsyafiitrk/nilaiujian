@@ -3992,12 +3992,12 @@ function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, nam
       entry.items.forEach(item => {
         nilaiRows += `<tr><td class="c">${item.sub}</td><td colspan="2" style="padding-left:14px">${item.nama}</td>${nilaiCells(item.id)}</tr>`;
         const n = nilaiSiswa[item.id];
-        if (n?.deskripsiRapor) deskRows += `<tr><td style="padding:2px 6px">${++deskIdx}. ${item.nama} — ${n.deskripsiRapor}</td></tr>`;
+        if (n?.deskripsiRapor) deskRows += `<tr><td style="padding:2px 6px;width:34%;vertical-align:top;font-weight:600;">${++deskIdx}. ${item.nama}</td><td style="padding:2px 6px;vertical-align:top;">${n.deskripsiRapor}</td></tr>`;
       });
     } else {
       nilaiRows += `<tr><td class="c" style="font-weight:700">${entry.no}</td><td colspan="2">${entry.nama}</td>${nilaiCells(entry.id)}</tr>`;
       const n = nilaiSiswa[entry.id];
-      if (n?.deskripsiRapor) deskRows += `<tr><td style="padding:2px 6px">${++deskIdx}. ${entry.nama} — ${n.deskripsiRapor}</td></tr>`;
+      if (n?.deskripsiRapor) deskRows += `<tr><td style="padding:2px 6px;width:34%;vertical-align:top;font-weight:600;">${++deskIdx}. ${entry.nama}</td><td style="padding:2px 6px;vertical-align:top;">${n.deskripsiRapor}</td></tr>`;
     }
   });
 
@@ -4068,7 +4068,8 @@ ${kopHtml}
 
 <div class="sec">C. Deskripsi Pengetahuan dan Keterampilan</div>
 <table class="b" style="margin-bottom:7px">
-  ${deskRows || '<tr><td style="height:36px;padding:2px 6px"></td></tr>'}
+  <tr><th style="width:34%;text-align:left;padding:2px 6px;">Mata Pelajaran</th><th style="text-align:left;padding:2px 6px;">Deskripsi</th></tr>
+  ${deskRows || '<tr><td style="height:28px;padding:2px 6px"></td><td></td></tr>'}
 </table>
 
 <table class="b" style="margin-bottom:10px">

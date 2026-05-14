@@ -1066,6 +1066,39 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
           <button class="btn btn-outline btn-sm" onclick="saveWaliKelasExport()">Simpan</button>
         </div>
       </div>
+
+      <!-- Tanda tangan online -->
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="ttd-online-toggle" style="width:16px;height:16px;accent-color:var(--teal);"
+            onchange="document.getElementById('ttd-online-section').style.display=this.checked?'block':'none';">
+          Gunakan Tanda Tangan Online
+        </label>
+      </div>
+      <div id="ttd-online-section" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <p style="font-size:12px;font-weight:700;margin-bottom:6px;">✍️ TTD Wali Kelas</p>
+            <div id="ttd-wali-preview" style="width:100%;height:64px;border:1.5px dashed var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);overflow:hidden;margin-bottom:6px;">Belum diupload</div>
+            <input type="file" id="ttd-wali-file" accept="image/*" style="display:none;" onchange="handleTtdUpload('wali',event)">
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-outline btn-sm" style="flex:1;" onclick="document.getElementById('ttd-wali-file').click()">Upload</button>
+              <button class="btn btn-ghost btn-sm" onclick="clearTtd('wali')">Hapus</button>
+            </div>
+          </div>
+          <div>
+            <p style="font-size:12px;font-weight:700;margin-bottom:6px;">✍️ TTD Kepala Madrasah</p>
+            <div id="ttd-kepsek-preview" style="width:100%;height:64px;border:1.5px dashed var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);overflow:hidden;margin-bottom:6px;">Belum diupload</div>
+            <input type="file" id="ttd-kepsek-file" accept="image/*" style="display:none;" onchange="handleTtdUpload('kepsek',event)">
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-outline btn-sm" style="flex:1;" onclick="document.getElementById('ttd-kepsek-file').click()">Upload</button>
+              <button class="btn btn-ghost btn-sm" onclick="clearTtd('kepsek')">Hapus</button>
+            </div>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--text3);margin-top:8px;">Gunakan gambar PNG transparan untuk hasil terbaik. Maks 300KB.</p>
+      </div>
+
       <button class="btn btn-primary btn-full" onclick="exportRaporPDF()">
         📄 Buka Rapor PDF
       </button>
@@ -3849,6 +3882,29 @@ async function saveKopSettings() {
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
+const ttdStore = { wali: '', kepsek: '' };
+
+function handleTtdUpload(who, event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 307200) { showToast('Gambar terlalu besar, maks 300KB', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    ttdStore[who] = e.target.result;
+    const prev = document.getElementById(`ttd-${who}-preview`);
+    if (prev) prev.innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:60px;object-fit:contain;">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearTtd(who) {
+  ttdStore[who] = '';
+  const prev = document.getElementById(`ttd-${who}-preview`);
+  if (prev) prev.innerHTML = 'Belum diupload';
+  const fi = document.getElementById(`ttd-${who}-file`);
+  if (fi) fi.value = '';
+}
+
 async function loadWaliKelasExport() {
   const kelas = document.getElementById('export-rapor-kelas').value;
   const grp = document.getElementById('wali-kelas-export-group');
@@ -3948,7 +4004,11 @@ async function exportRaporPDF() {
     const tahun = (document.getElementById('rapor-tahun')?.value   || '').trim();
     const tanggalRapor = (tgl && bulan && tahun) ? `${tgl} ${bulan} ${tahun}` : '_____________';
 
-    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}, sikapSettings, kop, namaWaliKelas, tanggalRapor));
+    const useTtd = document.getElementById('ttd-online-toggle')?.checked;
+    const ttdWali   = useTtd ? (ttdStore.wali   || '') : '';
+    const ttdKepsek = useTtd ? (ttdStore.kepsek || '') : '';
+
+    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}, sikapSettings, kop, namaWaliKelas, tanggalRapor, ttdWali, ttdKepsek));
     const html = `<!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8">
 <title>Rapor ${kelas} - 2025/2026</title>
@@ -3982,7 +4042,7 @@ ${pages.join('\n')}
   }
 }
 
-function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, namaWaliKelas = '', tanggalRapor = '_____________') {
+function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, namaWaliKelas = '', tanggalRapor = '_____________', ttdWali = '', ttdKepsek = '') {
   const K = { ...KOP_DEFAULTS, ...kop };
   const SPIRITUAL_MAPEL = ['ALQURAN_HADIS', 'TAUHID', 'FIKIH', 'SKI', 'BAHASA_ARAB'];
   const SOSIAL_MAPEL    = ['PPKN', 'IPS', 'IPA', 'PRAKARYA', 'KHOT', 'BAHASA_INDONESIA', 'BAHASA_INGGRIS'];
@@ -4139,12 +4199,12 @@ ${kopHtml}
     </td>
     <td style="width:34%">
       ${K.kota}, ${tanggalRapor}<br>Wali Kelas,
-      <br><br><br><br>
+      ${ttdWali ? `<br><img src="${ttdWali}" style="height:52px;max-width:140px;object-fit:contain;display:block;margin:2px auto;">` : '<br><br><br><br>'}
       <span class="uline">${namaWaliKelas || '______________________'}</span>
     </td>
     <td style="width:33%">
       Mengetahui,<br>Kepala Madrasah,
-      <br><br><br><br>
+      ${ttdKepsek ? `<br><img src="${ttdKepsek}" style="height:52px;max-width:140px;object-fit:contain;display:block;margin:2px auto;">` : '<br><br><br><br>'}
       <span class="uline">${K.kepsek}</span>
     </td>
   </tr>

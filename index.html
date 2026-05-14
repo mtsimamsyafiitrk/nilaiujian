@@ -1033,13 +1033,86 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Generate rapor lengkap per siswa dalam format PDF siap cetak.</p>
       <div class="form-group">
         <label>Pilih Kelas</label>
-        <select id="export-rapor-kelas">
+        <select id="export-rapor-kelas" onchange="loadWaliKelasExport()">
           <option value="">-- Pilih Kelas --</option>
         </select>
+      </div>
+      <div class="form-group" id="wali-kelas-export-group" style="display:none;">
+        <label>Wali Kelas <span style="font-size:11px;color:var(--text3);">(muncul di tanda tangan rapor)</span></label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="wali-kelas-export-nama" placeholder="Nama wali kelas..." style="flex:1;">
+          <button class="btn btn-outline btn-sm" onclick="saveWaliKelasExport()">Simpan</button>
+        </div>
       </div>
       <button class="btn btn-primary btn-full" onclick="exportRaporPDF()">
         📄 Buka Rapor PDF
       </button>
+    </div>
+
+    <!-- Kop Sekolah Editor -->
+    <div class="card card-body" style="margin-top:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleKopEditor()">
+        <h4 style="font-size:13px;font-weight:700;">🏫 Pengaturan Kop Sekolah</h4>
+        <span id="kop-editor-toggle" style="font-size:12px;color:var(--text2);">▼ Buka</span>
+      </div>
+      <div id="kop-editor-body" style="display:none;margin-top:12px;">
+        <!-- Logo upload -->
+        <div class="form-group">
+          <label style="font-size:12px;font-weight:700;">Logo Sekolah</label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+            <div id="kop-logo-preview" style="width:60px;height:60px;border:1.5px dashed var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);overflow:hidden;flex-shrink:0;">Logo</div>
+            <div>
+              <input type="file" id="kop-logo-file" accept="image/*" style="display:none;" onchange="handleLogoUpload(event)">
+              <button class="btn btn-outline btn-sm" onclick="document.getElementById('kop-logo-file').click()">Upload Logo</button>
+              <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="clearLogoKop()">Hapus</button>
+              <p style="font-size:11px;color:var(--text3);margin-top:4px;">PNG/JPG, maks 500KB</p>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Nama Yayasan</label>
+          <input type="text" id="kop-yayasan" placeholder="YAYASAN AL IMAM ASY-SYAFI'I TARAKAN">
+        </div>
+        <div class="form-group">
+          <label>Nama Pesantren</label>
+          <input type="text" id="kop-pesantren" placeholder="PESANTREN AL IMAM ASY-SYAFI'I TARAKAN">
+        </div>
+        <div class="form-group">
+          <label>Nama Madrasah</label>
+          <input type="text" id="kop-sekolah" placeholder="MTs AL IMAM ASY-SYAFI'I TARAKAN">
+        </div>
+        <div class="form-group">
+          <label>Teks Arab / Sub Judul</label>
+          <input type="text" id="kop-arabic" placeholder="مدرسةالثانوية...">
+        </div>
+        <div class="form-group">
+          <label>Alamat Lengkap</label>
+          <input type="text" id="kop-alamat" placeholder="Jalan Swaran Jaya RT.15 Juata Permai, Tarakan Telp. +62 ...">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="text" id="kop-email" placeholder="mtsimamsyafiitrk@gmail.com">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>NSM</label>
+            <input type="text" id="kop-nsm" placeholder="121265710005">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>NPSN</label>
+            <input type="text" id="kop-npsn" placeholder="70033661">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Nama Kepala Madrasah</label>
+          <input type="text" id="kop-kepsek" placeholder="HARMIN, S.Pd">
+        </div>
+        <div class="form-group">
+          <label>Kota (untuk tanda tangan)</label>
+          <input type="text" id="kop-kota" placeholder="Kota Tarakan">
+        </div>
+        <button class="btn btn-primary btn-full" onclick="saveKopSettings()">Simpan Pengaturan Kop</button>
+      </div>
     </div>
   </div>
 
@@ -3659,6 +3732,127 @@ async function exportGabungan(type) {
   }
 }
 
+// ─── KOP SEKOLAH & WALI KELAS ────────────────────────
+const KOP_DEFAULTS = {
+  yayasan:  "YAYASAN AL IMAM ASY-SYAFI'I TARAKAN",
+  pesantren:"PESANTREN AL IMAM ASY-SYAFI'I TARAKAN",
+  sekolah:  "MTs AL IMAM ASY-SYAFI’I TARAKAN",
+  arabic:   "مدرسةالثانويةالإمامالشافعي تاراكان – الكاليمانتانالشمالي – إندونيسيا",
+  alamat:   "Jalan Swaran Jaya RT.15 Juata Permai, Tarakan Telp. +62 853-2786-3877",
+  email:    "mtsimamsyafiitrk@gmail.com",
+  nsm:      "121265710005",
+  npsn:     "70033661",
+  kepsek:   "HARMIN, S.Pd",
+  kota:     "Kota Tarakan",
+  logoBase64: '',
+};
+
+let kopCache = null;
+
+function toggleKopEditor() {
+  const body = document.getElementById('kop-editor-body');
+  const toggle = document.getElementById('kop-editor-toggle');
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  toggle.textContent = open ? '▲ Tutup' : '▼ Buka';
+  if (open && !kopCache) loadKopSettings();
+}
+
+async function loadKopSettings() {
+  try {
+    const doc = await db.collection('settings').doc('kopSekolah').get();
+    kopCache = doc.exists ? { ...KOP_DEFAULTS, ...doc.data() } : { ...KOP_DEFAULTS };
+  } catch (_) { kopCache = { ...KOP_DEFAULTS }; }
+  const f = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  f('kop-yayasan',  kopCache.yayasan);
+  f('kop-pesantren',kopCache.pesantren);
+  f('kop-sekolah',  kopCache.sekolah);
+  f('kop-arabic',   kopCache.arabic);
+  f('kop-alamat',   kopCache.alamat);
+  f('kop-email',    kopCache.email);
+  f('kop-nsm',      kopCache.nsm);
+  f('kop-npsn',     kopCache.npsn);
+  f('kop-kepsek',   kopCache.kepsek);
+  f('kop-kota',     kopCache.kota);
+  if (kopCache.logoBase64) {
+    const prev = document.getElementById('kop-logo-preview');
+    if (prev) prev.innerHTML = `<img src="${kopCache.logoBase64}" style="width:100%;height:100%;object-fit:contain;">`;
+  }
+}
+
+function handleLogoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 512 * 1024) { showToast('Logo terlalu besar, maks 500KB', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const b64 = e.target.result;
+    if (!kopCache) kopCache = { ...KOP_DEFAULTS };
+    kopCache.logoBase64 = b64;
+    const prev = document.getElementById('kop-logo-preview');
+    if (prev) prev.innerHTML = `<img src="${b64}" style="width:100%;height:100%;object-fit:contain;">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearLogoKop() {
+  if (!kopCache) kopCache = { ...KOP_DEFAULTS };
+  kopCache.logoBase64 = '';
+  const prev = document.getElementById('kop-logo-preview');
+  if (prev) prev.innerHTML = 'Logo';
+  const fi = document.getElementById('kop-logo-file');
+  if (fi) fi.value = '';
+}
+
+async function saveKopSettings() {
+  const g = id => (document.getElementById(id)?.value || '').trim();
+  const data = {
+    yayasan:   g('kop-yayasan')   || KOP_DEFAULTS.yayasan,
+    pesantren: g('kop-pesantren') || KOP_DEFAULTS.pesantren,
+    sekolah:   g('kop-sekolah')   || KOP_DEFAULTS.sekolah,
+    arabic:    g('kop-arabic')    || KOP_DEFAULTS.arabic,
+    alamat:    g('kop-alamat')    || KOP_DEFAULTS.alamat,
+    email:     g('kop-email')     || KOP_DEFAULTS.email,
+    nsm:       g('kop-nsm')       || KOP_DEFAULTS.nsm,
+    npsn:      g('kop-npsn')      || KOP_DEFAULTS.npsn,
+    kepsek:    g('kop-kepsek')    || KOP_DEFAULTS.kepsek,
+    kota:      g('kop-kota')      || KOP_DEFAULTS.kota,
+    logoBase64: kopCache?.logoBase64 || '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    await db.collection('settings').doc('kopSekolah').set(data);
+    kopCache = { ...data };
+    showToast('Pengaturan kop disimpan ✓', 'success');
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function loadWaliKelasExport() {
+  const kelas = document.getElementById('export-rapor-kelas').value;
+  const grp = document.getElementById('wali-kelas-export-group');
+  const inp = document.getElementById('wali-kelas-export-nama');
+  if (!kelas) { grp.style.display = 'none'; return; }
+  grp.style.display = 'block';
+  inp.value = '';
+  try {
+    const doc = await db.collection('settings').doc(`waliKelas_${kelas}`).get();
+    if (doc.exists) inp.value = doc.data().namaWaliKelas || '';
+  } catch (_) {}
+}
+
+async function saveWaliKelasExport() {
+  const kelas = document.getElementById('export-rapor-kelas').value;
+  if (!kelas) return;
+  const nama = (document.getElementById('wali-kelas-export-nama')?.value || '').trim();
+  try {
+    await db.collection('settings').doc(`waliKelas_${kelas}`).set({
+      namaWaliKelas: nama,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    showToast('Wali kelas disimpan ✓', 'success');
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
 // ─── EXPORT RAPOR PDF ─────────────────────────────────
 const RAPOR_STRUCTURE = [
   { type: 'group', no: '1', label: "Pendidikan Agama", items: [
@@ -3713,7 +3907,21 @@ async function exportRaporPDF() {
       if (sikapDoc.exists) sikapSettings = { deskripsiSpiritual: '', deskripsiSosial: '', ...sikapDoc.data() };
     } catch (_) {}
 
-    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}, sikapSettings));
+    let kop = kopCache || { ...KOP_DEFAULTS };
+    try {
+      const kopDoc = await db.collection('settings').doc('kopSekolah').get();
+      if (kopDoc.exists) { kop = { ...KOP_DEFAULTS, ...kopDoc.data() }; kopCache = kop; }
+    } catch (_) {}
+
+    let namaWaliKelas = (document.getElementById('wali-kelas-export-nama')?.value || '').trim();
+    if (!namaWaliKelas) {
+      try {
+        const wkDoc = await db.collection('settings').doc(`waliKelas_${kelas}`).get();
+        if (wkDoc.exists) namaWaliKelas = wkDoc.data().namaWaliKelas || '';
+      } catch (_) {}
+    }
+
+    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}, sikapSettings, kop, namaWaliKelas));
     const html = `<!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8">
 <title>Rapor ${kelas} - 2025/2026</title>
@@ -3747,7 +3955,8 @@ ${pages.join('\n')}
   }
 }
 
-function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}) {
+function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, namaWaliKelas = '') {
+  const K = { ...KOP_DEFAULTS, ...kop };
   const SPIRITUAL_MAPEL = ['ALQURAN_HADIS', 'TAUHID', 'FIKIH', 'SKI', 'BAHASA_ARAB'];
   const SOSIAL_MAPEL    = ['PPKN', 'IPS', 'IPA', 'PRAKARYA', 'KHOT', 'BAHASA_INDONESIA', 'BAHASA_INGGRIS'];
 
@@ -3792,7 +4001,30 @@ function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}) {
     }
   });
 
+  const logoHtml = K.logoBase64
+    ? `<img src="${K.logoBase64}" style="height:72px;width:auto;display:block;margin:auto;">`
+    : `<div style="width:72px;height:72px;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:8pt;color:#aaa;">Logo</div>`;
+
+  const kopHtml = `<table style="width:100%;border-collapse:collapse;margin-bottom:0;padding-bottom:0;">
+  <tr>
+    <td style="width:82px;text-align:center;vertical-align:middle;padding:0 8px 4px 0;">${logoHtml}</td>
+    <td style="text-align:center;vertical-align:middle;padding-bottom:4px;line-height:1.45;">
+      <div style="font-size:8.5pt;">${K.yayasan}</div>
+      <div style="font-size:8.5pt;">${K.pesantren}</div>
+      <div style="font-size:14pt;font-weight:bold;">${K.sekolah}</div>
+      <div style="font-size:8pt;font-style:italic;">${K.arabic}</div>
+      <div style="font-size:8pt;">${K.alamat}</div>
+      <div style="font-size:8pt;">E-mail: <u>${K.email}</u></div>
+    </td>
+  </tr>
+</table>
+<hr style="border:none;border-top:3px solid #000;margin:3px 0 2px;">
+<div style="display:flex;justify-content:space-between;font-size:8.5pt;padding:1px 0 6px;">
+  <span>NSM : ${K.nsm}</span><span>NPSN : ${K.npsn}</span>
+</div>`;
+
   return `<div class="page">
+${kopHtml}
 <div class="title">PENCAPAIAN KOMPETENSI PESERTA DIDIK</div>
 <table style="margin-bottom:7px">
   <tr>
@@ -3866,14 +4098,14 @@ function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}) {
       <span class="uline">…………………………………….</span>
     </td>
     <td style="width:34%">
-      Kota Tarakan, _____________ 2026<br>Wali Kelas,
+      ${K.kota}, _____________ 2026<br>Wali Kelas,
       <br><br><br><br>
-      <span class="uline">______________________</span>
+      <span class="uline">${namaWaliKelas || '______________________'}</span>
     </td>
     <td style="width:33%">
       Mengetahui,<br>Kepala Madrasah,
       <br><br><br><br>
-      <span class="uline">HARMIN, S.Pd</span>
+      <span class="uline">${K.kepsek}</span>
     </td>
   </tr>
 </table>

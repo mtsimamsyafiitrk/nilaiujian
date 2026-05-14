@@ -3934,7 +3934,7 @@ async function loadRaporExportSettings() {
 
 async function saveRaporExportSettings() {
   const kelas = document.getElementById('export-rapor-kelas').value;
-  if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
+  const docKey = kelas ? `raporExport_${kelas}` : 'raporExport_default';
   const useTtd = document.getElementById('ttd-online-toggle').checked;
   const data = {
     tanggal: (document.getElementById('rapor-tanggal')?.value || '').trim(),
@@ -3946,7 +3946,7 @@ async function saveRaporExportSettings() {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
   try {
-    await db.collection('settings').doc(`raporExport_${kelas}`).set(data);
+    await db.collection('settings').doc(docKey).set(data);
     showToast('Pengaturan rapor disimpan ✓', 'success');
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }

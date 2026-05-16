@@ -3367,6 +3367,7 @@ async function loadAdminNilaiIjazah() {
         <th>NISN</th>
         <th class="sticky-col" style="min-width:180px;">Nama</th>
         ${mapelHeaders}
+        <th style="background:var(--teal);color:#fff;min-width:80px;">Rata-rata<br>Nilai</th>
       </tr></thead><tbody>`;
 
     siswaList.forEach((sw, idx) => {
@@ -3374,12 +3375,18 @@ async function loadAdminNilaiIjazah() {
       const rata = rs.rataKeseluruhan != null ? rs.rataKeseluruhan : null;
 
       let mapelCells = '';
+      const ijazahVals = [];
       mapelList.forEach(m => {
         const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
         const um = n.nilaiUM != null ? n.nilaiUM : null;
         const ijazah = um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null;
+        if (ijazah !== null) ijazahVals.push(ijazah);
         mapelCells += `<td style="text-align:center;"><span class="nilai-computed ijazah">${fmt(ijazah)}</span></td>`;
       });
+
+      const rataIjazah = ijazahVals.length > 0
+        ? ijazahVals.reduce((a, b) => a + b, 0) / ijazahVals.length
+        : null;
 
       html += `<tr>
         <td style="text-align:center;">${sw.no || idx + 1}</td>
@@ -3387,6 +3394,7 @@ async function loadAdminNilaiIjazah() {
         <td style="font-family:monospace;font-size:12px;">${sw.nisn || '-'}</td>
         <td class="sticky-col">${sw.nama}</td>
         ${mapelCells}
+        <td style="text-align:center;"><span class="nilai-computed rapor">${fmt(rataIjazah)}</span></td>
       </tr>`;
     });
 
@@ -3415,6 +3423,7 @@ async function exportIjazahExcel() {
 
     const header = ['No', 'Nomor Peserta', 'NISN', 'Nama'];
     mapelList.forEach(m => header.push(m.nama));
+    header.push('Rata-rata Nilai');
 
     const rows = [
       [`REKAPITULASI NILAI IJAZAH KELAS ${kelas}`],
@@ -3428,11 +3437,18 @@ async function exportIjazahExcel() {
       const rs = raporMap[sw.nisn] || {};
       const rata = rs.rataKeseluruhan != null ? rs.rataKeseluruhan : null;
       const row = [sw.no || idx + 1, sw.nomor, sw.nisn, sw.nama];
+      const ijazahVals = [];
       mapelList.forEach(m => {
         const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
         const um = n.nilaiUM != null ? n.nilaiUM : null;
-        row.push(um !== null && rata !== null ? fmt(um * 0.4 + rata * 0.6) : '');
+        const ijazah = um !== null && rata !== null ? fmt(um * 0.4 + rata * 0.6) : '';
+        if (ijazah !== '') ijazahVals.push(ijazah);
+        row.push(ijazah);
       });
+      const rataIjazah = ijazahVals.length > 0
+        ? fmt(ijazahVals.reduce((a, b) => a + b, 0) / ijazahVals.length)
+        : '';
+      row.push(rataIjazah);
       rows.push(row);
     });
 
@@ -3464,11 +3480,18 @@ async function exportIjazahPDF() {
       const rs = raporMap[sw.nisn] || {};
       const rata = rs.rataKeseluruhan != null ? rs.rataKeseluruhan : null;
       let cells = `<td>${sw.no || idx + 1}</td><td>${sw.nomor || '-'}</td><td>${sw.nisn || '-'}</td><td class="nama">${sw.nama}</td>`;
+      const ijazahVals = [];
       mapelList.forEach(m => {
         const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
         const um = n.nilaiUM != null ? n.nilaiUM : null;
-        cells += `<td>${um !== null && rata !== null ? fmt(um * 0.4 + rata * 0.6) : '-'}</td>`;
+        const ijazah = um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null;
+        if (ijazah !== null) ijazahVals.push(ijazah);
+        cells += `<td>${ijazah !== null ? fmt(ijazah) : '-'}</td>`;
       });
+      const rataIjazah = ijazahVals.length > 0
+        ? ijazahVals.reduce((a, b) => a + b, 0) / ijazahVals.length
+        : null;
+      cells += `<td class="rata">${rataIjazah !== null ? fmt(rataIjazah) : '-'}</td>`;
       return `<tr>${cells}</tr>`;
     }).join('');
 
@@ -3484,12 +3507,14 @@ async function exportIjazahPDF() {
   th,td{border:1px solid #444;padding:3px 5px;text-align:center;}
   th{background:#e8f5e9;font-size:8px;}
   td.nama{text-align:left;}
+  td.rata{background:#dbeafe;font-weight:700;}
+  th:last-child{background:#1e40af;color:#fff;}
   @media print{@page{size:landscape;margin:8mm;}}
 </style></head><body>
 <h2>REKAPITULASI NILAI IJAZAH — KELAS ${kelas}</h2>
 <p>Madrasah Al Imam Asy-Syafi'i Tarakan &nbsp;|&nbsp; Formula: Nilai UM × 40% + Rata-rata Raport 5 Semester × 60%</p>
 <table>
-  <thead><tr><th>No</th><th>Nomor Peserta</th><th>NISN</th><th>Nama</th>${mapelHeaderHTML}</tr></thead>
+  <thead><tr><th>No</th><th>Nomor Peserta</th><th>NISN</th><th>Nama</th>${mapelHeaderHTML}<th>Rata-rata Nilai</th></tr></thead>
   <tbody>${rowsHTML}</tbody>
 </table>
 <script>window.onload=()=>window.print();<\/script>

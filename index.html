@@ -3162,6 +3162,210 @@ async function loadAdminNilai() {
   }
 }
 
+// ─── ADMIN: NILAI SUB-TABS ─────────────────────────────
+function switchNilaiSubTab(tab) {
+  document.querySelectorAll('.sub-tab-item').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sub-tab-content').forEach(t => t.classList.remove('active'));
+  const activeBtn = document.querySelector(`.sub-tab-item[onclick="switchNilaiSubTab('${tab}')"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+  const el = document.getElementById(`sub-tab-nilai-${tab}`);
+  if (el) el.classList.add('active');
+
+  if (tab === 'rapor') {
+    populateMapelSelect('admin-mapel-select');
+    populateKelasSelect('admin-kelas-select');
+    loadRaporSemView();
+  }
+  if (tab === 'ijazah') {
+    populateMapelSelect('admin-mapel-ijazah-select');
+    populateKelasSelect('admin-kelas-ijazah-select');
+  }
+}
+
+async function getNilaiRaporSemMap() {
+  if (nilaiRaporSemCache) return nilaiRaporSemCache;
+  const snap = await db.collection('nilaiRaporSemester').get();
+  nilaiRaporSemCache = {};
+  snap.docs.forEach(d => { nilaiRaporSemCache[d.data().nisn] = d.data(); });
+  return nilaiRaporSemCache;
+}
+
+async function loadRaporSemView() {
+  const container = document.getElementById('raport-sem-view');
+  if (!container) return;
+  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const raporMap = await getNilaiRaporSemMap();
+    const allSiswa = await getAllSiswa();
+
+    if (Object.keys(raporMap).length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Belum ada data. Upload file Excel Rekapitulasi.</p></div>';
+      return;
+    }
+
+    // Urutkan sesuai urutan siswa di sistem
+    const ordered = allSiswa.map(sw => raporMap[sw.nisn] ? { ...raporMap[sw.nisn], _nama: sw.nama } : null).filter(Boolean);
+    // Siswa di raporMap yang tidak ada di allSiswa (jika ada)
+    Object.values(raporMap).forEach(d => {
+      if (!ordered.find(o => o.nisn === d.nisn)) ordered.push({ ...d, _nama: d.nama });
+    });
+
+    const fmt = v => (v != null && !isNaN(v)) ? (+v).toFixed(2) : '-';
+
+    let html = `<div class="nilai-table-wrap"><table class="nilai-table">
+      <thead>
+        <tr>
+          <th class="sticky-col" rowspan="2">Nama Siswa</th>
+          <th rowspan="2">NISN</th>
+          <th colspan="5" class="group-header">RATA-RATA NILAI RAPORT</th>
+          <th rowspan="2" style="background:var(--teal);color:#fff;min-width:80px;">Rata-rata<br>Keseluruhan</th>
+        </tr>
+        <tr>
+          <th>Sem 1<br><small style="font-weight:400;">(Kls 7 Ganjil)</small></th>
+          <th>Sem 2<br><small style="font-weight:400;">(Kls 7 Genap)</small></th>
+          <th>Sem 3<br><small style="font-weight:400;">(Kls 8 Ganjil)</small></th>
+          <th>Sem 4<br><small style="font-weight:400;">(Kls 8 Genap)</small></th>
+          <th>Sem 5<br><small style="font-weight:400;">(Kls 9 Ganjil)</small></th>
+        </tr>
+      </thead><tbody>`;
+
+    ordered.forEach(d => {
+      html += `<tr>
+        <td class="sticky-col">${d._nama || d.nama || '-'}</td>
+        <td style="font-family:monospace;font-size:12px;">${d.nisn || '-'}</td>
+        <td style="text-align:center;">${fmt(d.s1)}</td>
+        <td style="text-align:center;">${fmt(d.s2)}</td>
+        <td style="text-align:center;">${fmt(d.s3)}</td>
+        <td style="text-align:center;">${fmt(d.s4)}</td>
+        <td style="text-align:center;">${fmt(d.s5)}</td>
+        <td style="text-align:center;"><span class="nilai-computed rapor">${fmt(d.rataKeseluruhan)}</span></td>
+      </tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state"><p>Error: ${e.message}</p></div>`;
+  }
+}
+
+async function handleRaporSemUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+  const btn = document.getElementById('upload-raport-sem-btn');
+  if (btn) { btn.textContent = '⏳ Memproses...'; btn.disabled = true; }
+  try {
+    const arrayBuf = await file.arrayBuffer();
+    const wb = XLSX.read(arrayBuf, { type: 'array' });
+
+    // Cari sheet Rekapitulasi
+    const sheetName = wb.SheetNames.find(n => /rekap/i.test(n)) || wb.SheetNames[wb.SheetNames.length - 1];
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+    // Cari baris header (yang mengandung 'NISN')
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(6, rows.length); i++) {
+      if (rows[i] && rows[i].some(c => c && c.toString().toUpperCase().includes('NISN'))) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx === -1) throw new Error('Format tidak sesuai: kolom NISN tidak ditemukan di sheet ' + sheetName);
+
+    const batch = db.batch();
+    let count = 0;
+
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row[0] == null) continue;
+      const nisn = row[2] != null ? row[2].toString().trim() : null;
+      if (!nisn || nisn === '') continue;
+
+      const toNum = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+      const s1 = toNum(row[3]);
+      const s2 = toNum(row[4]);
+      const s3 = toNum(row[5]);
+      const s4 = toNum(row[6]);
+      const s5 = toNum(row[7]);
+      const vals = [s1, s2, s3, s4, s5].filter(v => v !== null);
+      const rataKeseluruhan = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+      const nama = row[1] != null ? row[1].toString().trim() : '';
+
+      batch.set(db.collection('nilaiRaporSemester').doc(nisn), {
+        nisn, nama, s1, s2, s3, s4, s5, rataKeseluruhan,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      count++;
+    }
+
+    if (count === 0) throw new Error('Tidak ada data yang dapat dibaca. Pastikan format file sesuai.');
+    await batch.commit();
+    nilaiRaporSemCache = null;
+    showToast(`${count} data raport semester berhasil diupload ✓`, 'success');
+    loadRaporSemView();
+  } catch (e) {
+    showToast('Gagal upload: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.textContent = '📤 Upload Excel'; btn.disabled = false; }
+  }
+}
+
+async function loadAdminNilaiIjazah() {
+  const mapelId = document.getElementById('admin-mapel-ijazah-select').value;
+  const kelas = document.getElementById('admin-kelas-ijazah-select')?.value || '';
+  const container = document.getElementById('admin-ijazah-view');
+  if (!mapelId) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">🎓</div><p>Pilih mapel untuk melihat nilai ijazah</p></div>';
+    return;
+  }
+  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const [allSiswa, nilaiSnap, raporMap] = await Promise.all([
+      getAllSiswa(),
+      db.collection('nilai').where('mapelId', '==', mapelId).get(),
+      getNilaiRaporSemMap(),
+    ]);
+
+    const nilaiMap = {};
+    nilaiSnap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
+    const siswaFilter = kelas ? allSiswa.filter(sw => sw.kelas === kelas) : allSiswa;
+
+    const fmt = v => (v != null && !isNaN(v)) ? (+v).toFixed(2) : '-';
+
+    let html = `<div class="nilai-table-wrap"><table class="nilai-table">
+      <thead><tr>
+        <th class="sticky-col">Nama Siswa</th>
+        <th>NISN</th>
+        <th style="background:#7c3aed;color:#fff;">Nilai UM</th>
+        <th style="background:#1e40af;color:#fff;">Rata-rata Raport<br>5 Semester</th>
+        <th style="background:#92400e;color:#fff;">Nilai Ijazah<br><small style="font-weight:400;">(UM×40% + Raport×60%)</small></th>
+      </tr></thead><tbody>`;
+
+    siswaFilter.forEach(sw => {
+      const n = nilaiMap[sw.nomor] || {};
+      const rs = raporMap[sw.nisn] || {};
+      const um = n.nilaiUM != null ? n.nilaiUM : null;
+      const rata = rs.rataKeseluruhan != null ? rs.rataKeseluruhan : null;
+      const ijazah = um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null;
+
+      html += `<tr>
+        <td class="sticky-col">${sw.nama}</td>
+        <td style="font-family:monospace;font-size:12px;">${sw.nisn}</td>
+        <td style="text-align:center;"><span style="font-weight:700;color:#7c3aed;">${fmt(um)}</span></td>
+        <td style="text-align:center;"><span class="nilai-computed rapor">${fmt(rata)}</span></td>
+        <td style="text-align:center;"><span class="nilai-computed ijazah">${fmt(ijazah)}</span></td>
+      </tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state"><p>Error: ${e.message}</p></div>`;
+  }
+}
+
 // ─── ADMIN: MAPEL TAB ─────────────────────────────────
 async function loadMapelTab() {
   const container = document.getElementById('mapel-list-container');

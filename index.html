@@ -1046,25 +1046,19 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
     <!-- SUB-TAB: NILAI IJAZAH -->
     <div id="sub-tab-nilai-ijazah" class="sub-tab-content">
       <div class="section-header" style="margin-bottom:4px;">
-        <h3>Nilai Ijazah Per Mapel</h3>
+        <h3>Nilai Ijazah</h3>
       </div>
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">
         <strong>Formula:</strong> Nilai Ijazah = Nilai UM × 40% + Rata-rata Raport 5 Semester × 60%
       </p>
       <div class="form-group">
-        <label>Pilih Mata Pelajaran</label>
-        <select id="admin-mapel-ijazah-select" onchange="loadAdminNilaiIjazah()">
-          <option value="">-- Pilih Mapel --</option>
-        </select>
-      </div>
-      <div class="form-group">
         <label>Pilih Kelas</label>
         <select id="admin-kelas-ijazah-select" onchange="loadAdminNilaiIjazah()">
-          <option value="">Semua Kelas</option>
+          <option value="">-- Pilih Kelas --</option>
         </select>
       </div>
       <div id="admin-ijazah-view">
-        <div class="empty-state"><div class="icon">🎓</div><p>Pilih mapel untuk melihat nilai ijazah</p></div>
+        <div class="empty-state"><div class="icon">🎓</div><p>Pilih kelas untuk melihat nilai ijazah</p></div>
       </div>
     </div>
   </div>
@@ -3177,8 +3171,7 @@ function switchNilaiSubTab(tab) {
     loadRaporSemView();
   }
   if (tab === 'ijazah') {
-    populateMapelSelect('admin-mapel-ijazah-select');
-    populateKelasSelect('admin-kelas-ijazah-select');
+    populateKelasSelect('admin-kelas-ijazah-select', '-- Pilih Kelas --');
   }
 }
 
@@ -3313,49 +3306,65 @@ async function handleRaporSemUpload(event) {
 }
 
 async function loadAdminNilaiIjazah() {
-  const mapelId = document.getElementById('admin-mapel-ijazah-select').value;
   const kelas = document.getElementById('admin-kelas-ijazah-select')?.value || '';
   const container = document.getElementById('admin-ijazah-view');
-  if (!mapelId) {
-    container.innerHTML = '<div class="empty-state"><div class="icon">🎓</div><p>Pilih mapel untuk melihat nilai ijazah</p></div>';
+  if (!kelas) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">🎓</div><p>Pilih kelas untuk melihat nilai ijazah</p></div>';
     return;
   }
   container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
-    const [allSiswa, nilaiSnap, raporMap] = await Promise.all([
+    const [allSiswa, mapelList, nilaiSnap, raporMap] = await Promise.all([
       getAllSiswa(),
-      db.collection('nilai').where('mapelId', '==', mapelId).get(),
+      getMapelList(),
+      db.collection('nilai').where('kelas', '==', kelas).get(),
       getNilaiRaporSemMap(),
     ]);
 
-    const nilaiMap = {};
-    nilaiSnap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
-    const siswaFilter = kelas ? allSiswa.filter(sw => sw.kelas === kelas) : allSiswa;
+    const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
+
+    // nilaiByMapelNomor: { mapelId_nomor → data }
+    const nilaiByKey = {};
+    nilaiSnap.docs.forEach(d => {
+      const dat = d.data();
+      nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat;
+    });
 
     const fmt = v => (v != null && !isNaN(v)) ? (+v).toFixed(2) : '-';
 
+    // Header baris mapel
+    let mapelHeaders = '';
+    mapelList.forEach(m => {
+      mapelHeaders += `<th style="background:#92400e;color:#fff;min-width:80px;">${m.icon || ''} ${m.nama}</th>`;
+    });
+
     let html = `<div class="nilai-table-wrap"><table class="nilai-table">
       <thead><tr>
-        <th class="sticky-col">Nama Siswa</th>
+        <th class="sticky-col" style="min-width:44px;">No</th>
+        <th style="min-width:160px;">Nomor Peserta</th>
         <th>NISN</th>
-        <th style="background:#7c3aed;color:#fff;">Nilai UM</th>
-        <th style="background:#1e40af;color:#fff;">Rata-rata Raport<br>5 Semester</th>
-        <th style="background:#92400e;color:#fff;">Nilai Ijazah<br><small style="font-weight:400;">(UM×40% + Raport×60%)</small></th>
+        <th class="sticky-col" style="min-width:180px;">Nama</th>
+        ${mapelHeaders}
       </tr></thead><tbody>`;
 
-    siswaFilter.forEach(sw => {
-      const n = nilaiMap[sw.nomor] || {};
+    siswaList.forEach((sw, idx) => {
       const rs = raporMap[sw.nisn] || {};
-      const um = n.nilaiUM != null ? n.nilaiUM : null;
       const rata = rs.rataKeseluruhan != null ? rs.rataKeseluruhan : null;
-      const ijazah = um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null;
+
+      let mapelCells = '';
+      mapelList.forEach(m => {
+        const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
+        const um = n.nilaiUM != null ? n.nilaiUM : null;
+        const ijazah = um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null;
+        mapelCells += `<td style="text-align:center;"><span class="nilai-computed ijazah">${fmt(ijazah)}</span></td>`;
+      });
 
       html += `<tr>
+        <td style="text-align:center;">${sw.no || idx + 1}</td>
+        <td style="font-family:monospace;font-size:12px;">${sw.nomor || '-'}</td>
+        <td style="font-family:monospace;font-size:12px;">${sw.nisn || '-'}</td>
         <td class="sticky-col">${sw.nama}</td>
-        <td style="font-family:monospace;font-size:12px;">${sw.nisn}</td>
-        <td style="text-align:center;"><span style="font-weight:700;color:#7c3aed;">${fmt(um)}</span></td>
-        <td style="text-align:center;"><span class="nilai-computed rapor">${fmt(rata)}</span></td>
-        <td style="text-align:center;"><span class="nilai-computed ijazah">${fmt(ijazah)}</span></td>
+        ${mapelCells}
       </tr>`;
     });
 

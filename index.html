@@ -1018,7 +1018,13 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
           <button class="btn btn-primary btn-sm" id="upload-raport-sem-btn" onclick="document.getElementById('raport-sem-file').click()">📤 Upload Excel</button>
         </div>
       </div>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Upload file Excel Rekapitulasi (sheet <strong>Rekapitulasi</strong>). Kolom yang dibaca: NISN, Rata-rata Sem 1–5.</p>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">Upload file Excel Rekapitulasi (sheet <strong>Rekapitulasi</strong>). Sistem otomatis memisahkan data per kelas.</p>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Pilih Kelas</label>
+        <select id="raport-sem-kelas-select" onchange="loadRaporSemView()">
+          <option value="">Semua Kelas</option>
+        </select>
+      </div>
       <div id="raport-sem-view">
         <div class="empty-state"><div class="icon">📊</div><p>Belum ada data. Upload file Excel Rekapitulasi.</p></div>
       </div>
@@ -1047,6 +1053,10 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
     <div id="sub-tab-nilai-ijazah" class="sub-tab-content">
       <div class="section-header" style="margin-bottom:4px;">
         <h3>Nilai Ijazah</h3>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm" onclick="exportIjazahExcel()">📥 Excel</button>
+          <button class="btn btn-gold btn-sm" onclick="exportIjazahPDF()">📄 PDF</button>
+        </div>
       </div>
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">
         <strong>Formula:</strong> Nilai Ijazah = Nilai UM × 40% + Rata-rata Raport 5 Semester × 60%
@@ -3168,6 +3178,7 @@ function switchNilaiSubTab(tab) {
   if (tab === 'rapor') {
     populateMapelSelect('admin-mapel-select');
     populateKelasSelect('admin-kelas-select');
+    populateKelasSelect('raport-sem-kelas-select');
     loadRaporSemView();
   }
   if (tab === 'ijazah') {
@@ -3186,30 +3197,39 @@ async function getNilaiRaporSemMap() {
 async function loadRaporSemView() {
   const container = document.getElementById('raport-sem-view');
   if (!container) return;
+  const kelasFilter = document.getElementById('raport-sem-kelas-select')?.value || '';
   container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
-    const raporMap = await getNilaiRaporSemMap();
-    const allSiswa = await getAllSiswa();
+    const [raporMap, allSiswa] = await Promise.all([getNilaiRaporSemMap(), getAllSiswa()]);
 
     if (Object.keys(raporMap).length === 0) {
       container.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Belum ada data. Upload file Excel Rekapitulasi.</p></div>';
       return;
     }
 
-    // Urutkan sesuai urutan siswa di sistem
-    const ordered = allSiswa.map(sw => raporMap[sw.nisn] ? { ...raporMap[sw.nisn], _nama: sw.nama } : null).filter(Boolean);
-    // Siswa di raporMap yang tidak ada di allSiswa (jika ada)
-    Object.values(raporMap).forEach(d => {
-      if (!ordered.find(o => o.nisn === d.nisn)) ordered.push({ ...d, _nama: d.nama });
-    });
+    // Filter siswa per kelas, urutkan sesuai sistem rombel
+    const filteredSiswa = kelasFilter ? allSiswa.filter(sw => sw.kelas === kelasFilter) : allSiswa;
+    const ordered = filteredSiswa
+      .map(sw => raporMap[sw.nisn]
+        ? { ...raporMap[sw.nisn], _nama: sw.nama, _no: sw.no, _kelas: sw.kelas }
+        : null)
+      .filter(Boolean);
+
+    if (ordered.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Tidak ada data untuk kelas ini.</p></div>';
+      return;
+    }
 
     const fmt = v => (v != null && !isNaN(v)) ? (+v).toFixed(2) : '-';
+    const showKelas = !kelasFilter;
 
     let html = `<div class="nilai-table-wrap"><table class="nilai-table">
       <thead>
         <tr>
-          <th class="sticky-col" rowspan="2">Nama Siswa</th>
+          <th rowspan="2" style="min-width:40px;">No</th>
           <th rowspan="2">NISN</th>
+          ${showKelas ? '<th rowspan="2">Kelas</th>' : ''}
+          <th class="sticky-col" rowspan="2" style="min-width:180px;">Nama Siswa</th>
           <th colspan="5" class="group-header">RATA-RATA NILAI RAPORT</th>
           <th rowspan="2" style="background:var(--teal);color:#fff;min-width:80px;">Rata-rata<br>Keseluruhan</th>
         </tr>
@@ -3222,10 +3242,12 @@ async function loadRaporSemView() {
         </tr>
       </thead><tbody>`;
 
-    ordered.forEach(d => {
+    ordered.forEach((d, idx) => {
       html += `<tr>
-        <td class="sticky-col">${d._nama || d.nama || '-'}</td>
+        <td style="text-align:center;">${d._no || idx + 1}</td>
         <td style="font-family:monospace;font-size:12px;">${d.nisn || '-'}</td>
+        ${showKelas ? `<td style="text-align:center;">${d._kelas || '-'}</td>` : ''}
+        <td class="sticky-col">${d._nama || d.nama || '-'}</td>
         <td style="text-align:center;">${fmt(d.s1)}</td>
         <td style="text-align:center;">${fmt(d.s2)}</td>
         <td style="text-align:center;">${fmt(d.s3)}</td>
@@ -3373,6 +3395,108 @@ async function loadAdminNilaiIjazah() {
   } catch (e) {
     container.innerHTML = `<div class="empty-state"><p>Error: ${e.message}</p></div>`;
   }
+}
+
+// ─── EXPORT NILAI IJAZAH ──────────────────────────────
+async function exportIjazahExcel() {
+  const kelas = document.getElementById('admin-kelas-ijazah-select')?.value || '';
+  if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
+  showToast('Menyiapkan export Excel...', '');
+  try {
+    const [allSiswa, mapelList, nilaiSnap, raporMap] = await Promise.all([
+      getAllSiswa(), getMapelList(),
+      db.collection('nilai').where('kelas', '==', kelas).get(),
+      getNilaiRaporSemMap(),
+    ]);
+    const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
+    const nilaiByKey = {};
+    nilaiSnap.docs.forEach(d => { const dat = d.data(); nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat; });
+    const fmt = v => (v != null && !isNaN(v)) ? +((+v).toFixed(2)) : '';
+
+    const header = ['No', 'Nomor Peserta', 'NISN', 'Nama'];
+    mapelList.forEach(m => header.push(m.nama));
+
+    const rows = [
+      [`REKAPITULASI NILAI IJAZAH KELAS ${kelas}`],
+      [`Madrasah Al Imam Asy-Syafi'i Tarakan`],
+      [`Formula: Nilai UM × 40% + Rata-rata Raport 5 Semester × 60%`],
+      [],
+      header,
+    ];
+
+    siswaList.forEach((sw, idx) => {
+      const rs = raporMap[sw.nisn] || {};
+      const rata = rs.rataKeseluruhan != null ? rs.rataKeseluruhan : null;
+      const row = [sw.no || idx + 1, sw.nomor, sw.nisn, sw.nama];
+      mapelList.forEach(m => {
+        const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
+        const um = n.nilaiUM != null ? n.nilaiUM : null;
+        row.push(um !== null && rata !== null ? fmt(um * 0.4 + rata * 0.6) : '');
+      });
+      rows.push(row);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb_out = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb_out, ws, `Nilai Ijazah ${kelas}`);
+    XLSX.writeFile(wb_out, `NilaiIjazah_${kelas}_${new Date().toLocaleDateString('id-ID').replace(/\//g,'-')}.xlsx`);
+    showToast('Export Excel berhasil ✓', 'success');
+  } catch (e) { showToast('Gagal export: ' + e.message, 'error'); }
+}
+
+async function exportIjazahPDF() {
+  const kelas = document.getElementById('admin-kelas-ijazah-select')?.value || '';
+  if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
+  showToast('Menyiapkan PDF...', '');
+  try {
+    const [allSiswa, mapelList, nilaiSnap, raporMap] = await Promise.all([
+      getAllSiswa(), getMapelList(),
+      db.collection('nilai').where('kelas', '==', kelas).get(),
+      getNilaiRaporSemMap(),
+    ]);
+    const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
+    const nilaiByKey = {};
+    nilaiSnap.docs.forEach(d => { const dat = d.data(); nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat; });
+    const fmt = v => (v != null && !isNaN(v)) ? (+v).toFixed(2) : '-';
+
+    const mapelHeaderHTML = mapelList.map(m => `<th>${m.nama}</th>`).join('');
+    const rowsHTML = siswaList.map((sw, idx) => {
+      const rs = raporMap[sw.nisn] || {};
+      const rata = rs.rataKeseluruhan != null ? rs.rataKeseluruhan : null;
+      let cells = `<td>${sw.no || idx + 1}</td><td>${sw.nomor || '-'}</td><td>${sw.nisn || '-'}</td><td class="nama">${sw.nama}</td>`;
+      mapelList.forEach(m => {
+        const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
+        const um = n.nilaiUM != null ? n.nilaiUM : null;
+        cells += `<td>${um !== null && rata !== null ? fmt(um * 0.4 + rata * 0.6) : '-'}</td>`;
+      });
+      return `<tr>${cells}</tr>`;
+    }).join('');
+
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html><head>
+<meta charset="UTF-8">
+<title>Nilai Ijazah ${kelas}</title>
+<style>
+  body{font-family:Arial,sans-serif;font-size:9px;margin:15px;}
+  h2{text-align:center;margin:0 0 2px;font-size:12px;}
+  p{text-align:center;margin:0 0 8px;font-size:10px;color:#555;}
+  table{width:100%;border-collapse:collapse;}
+  th,td{border:1px solid #444;padding:3px 5px;text-align:center;}
+  th{background:#e8f5e9;font-size:8px;}
+  td.nama{text-align:left;}
+  @media print{@page{size:landscape;margin:8mm;}}
+</style></head><body>
+<h2>REKAPITULASI NILAI IJAZAH — KELAS ${kelas}</h2>
+<p>Madrasah Al Imam Asy-Syafi'i Tarakan &nbsp;|&nbsp; Formula: Nilai UM × 40% + Rata-rata Raport 5 Semester × 60%</p>
+<table>
+  <thead><tr><th>No</th><th>Nomor Peserta</th><th>NISN</th><th>Nama</th>${mapelHeaderHTML}</tr></thead>
+  <tbody>${rowsHTML}</tbody>
+</table>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`);
+    win.document.close();
+    showToast('PDF siap dicetak ✓', 'success');
+  } catch (e) { showToast('Gagal export PDF: ' + e.message, 'error'); }
 }
 
 // ─── ADMIN: MAPEL TAB ─────────────────────────────────

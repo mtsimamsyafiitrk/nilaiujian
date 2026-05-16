@@ -275,6 +275,30 @@ body {
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 
+/* ─── SUB-TABS (dalam tab Nilai) ─── */
+.sub-tab-bar {
+  display: flex;
+  background: var(--surface3);
+  border-bottom: 2px solid var(--border);
+  padding: 0 16px;
+  gap: 4px;
+}
+.sub-tab-item {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  white-space: nowrap;
+  transition: all .2s;
+}
+.sub-tab-item:hover { color: var(--teal); }
+.sub-tab-item.active { color: var(--teal); border-bottom-color: var(--teal); }
+.sub-tab-content { display: none; padding: 16px; }
+.sub-tab-content.active { display: block; }
+
 /* ─── CARDS ─── */
 .card {
   background: white;
@@ -979,24 +1003,69 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
   </div>
 
   <!-- TAB: NILAI -->
-  <div id="tab-nilai" class="tab-content content">
-    <div class="section-header">
-      <h3>Lihat Nilai Per Mapel</h3>
+  <div id="tab-nilai" class="tab-content content" style="padding:0;overflow-y:auto;">
+    <div class="sub-tab-bar">
+      <div class="sub-tab-item active" onclick="switchNilaiSubTab('rapor')">📋 Nilai Rapor</div>
+      <div class="sub-tab-item" onclick="switchNilaiSubTab('ijazah')">🎓 Nilai Ijazah</div>
     </div>
-    <div class="form-group">
-      <label>Pilih Mata Pelajaran</label>
-      <select id="admin-mapel-select" onchange="loadAdminNilai()">
-        <option value="">-- Pilih Mapel --</option>
-      </select>
+
+    <!-- SUB-TAB: NILAI RAPOR -->
+    <div id="sub-tab-nilai-rapor" class="sub-tab-content active">
+      <div class="section-header" style="margin-bottom:8px;">
+        <h3>Rekapitulasi Rata-rata Raport Semester 1–5</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="file" id="raport-sem-file" accept=".xlsx,.xls" style="display:none;" onchange="handleRaporSemUpload(event)">
+          <button class="btn btn-primary btn-sm" id="upload-raport-sem-btn" onclick="document.getElementById('raport-sem-file').click()">📤 Upload Excel</button>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Upload file Excel Rekapitulasi (sheet <strong>Rekapitulasi</strong>). Kolom yang dibaca: NISN, Rata-rata Sem 1–5.</p>
+      <div id="raport-sem-view">
+        <div class="empty-state"><div class="icon">📊</div><p>Belum ada data. Upload file Excel Rekapitulasi.</p></div>
+      </div>
+
+      <div class="section-header" style="margin-top:24px;margin-bottom:8px;">
+        <h3>Nilai Raport Per Mapel (Semester 6)</h3>
+      </div>
+      <div class="form-group">
+        <label>Pilih Mata Pelajaran</label>
+        <select id="admin-mapel-select" onchange="loadAdminNilai()">
+          <option value="">-- Pilih Mapel --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Pilih Kelas</label>
+        <select id="admin-kelas-select" onchange="loadAdminNilai()">
+          <option value="">Semua Kelas</option>
+        </select>
+      </div>
+      <div id="admin-nilai-view">
+        <div class="empty-state"><div class="icon">📋</div><p>Pilih mapel untuk melihat nilai</p></div>
+      </div>
     </div>
-    <div class="form-group">
-      <label>Pilih Kelas</label>
-      <select id="admin-kelas-select" onchange="loadAdminNilai()">
-        <option value="">Semua Kelas</option>
-      </select>
-    </div>
-    <div id="admin-nilai-view">
-      <div class="empty-state"><div class="icon">📋</div><p>Pilih mapel untuk melihat nilai</p></div>
+
+    <!-- SUB-TAB: NILAI IJAZAH -->
+    <div id="sub-tab-nilai-ijazah" class="sub-tab-content">
+      <div class="section-header" style="margin-bottom:4px;">
+        <h3>Nilai Ijazah Per Mapel</h3>
+      </div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+        <strong>Formula:</strong> Nilai Ijazah = Nilai UM × 40% + Rata-rata Raport 5 Semester × 60%
+      </p>
+      <div class="form-group">
+        <label>Pilih Mata Pelajaran</label>
+        <select id="admin-mapel-ijazah-select" onchange="loadAdminNilaiIjazah()">
+          <option value="">-- Pilih Mapel --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Pilih Kelas</label>
+        <select id="admin-kelas-ijazah-select" onchange="loadAdminNilaiIjazah()">
+          <option value="">Semua Kelas</option>
+        </select>
+      </div>
+      <div id="admin-ijazah-view">
+        <div class="empty-state"><div class="icon">🎓</div><p>Pilih mapel untuk melihat nilai ijazah</p></div>
+      </div>
     </div>
   </div>
 
@@ -1744,6 +1813,7 @@ let settingsCache = {};      // keyed by mapelId or 'default'
 let mapelCache = null;       // null = not loaded yet; array when loaded
 let rombelCache = null;      // null = not loaded yet; array when loaded
 let currentNilaiSettings = null;
+let nilaiRaporSemCache = null; // null = belum dimuat; map nisn→data jika sudah
 
 // ─── FIREBASE CONFIG (HARDCODED) ─────────────────────
 const FIREBASE_CONFIG = {
@@ -1793,7 +1863,7 @@ function switchTab(tab) {
   if (tab === 'siswa') { initSiswaTab(); switchSiswaSubTab('siswa'); }
   if (tab === 'mapel') loadMapelTab();
   if (tab === 'dashboard') loadAdminDashboard();
-  if (tab === 'nilai') { populateMapelSelect('admin-mapel-select'); populateKelasSelect('admin-kelas-select'); }
+  if (tab === 'nilai') { switchNilaiSubTab('rapor'); }
   if (tab === 'export') { populateMapelSelect('export-mapel-select'); populateKelasSelect('export-kelas-select'); populateKelasSelect('export-rapor-kelas', '-- Pilih Kelas --', (val) => { if (val) loadRaporExportSettings(); }); loadGlobalRaporSettings(); }
   if (tab === 'pengaturan') loadSettingsTab();
 }
@@ -3563,6 +3633,15 @@ async function saveAllNilai() {
   const settingsSnapshot = { jumlahTugas: s.jumlahTugas, jumlahUH: s.jumlahUH, adaUTS: s.adaUTS, bobotFormatif: s.bobotFormatif, bobotSumatif: s.bobotSumatif };
   const deskripsiMapelSave = (document.getElementById('input-deskripsi-mapel')?.value || '').trim();
 
+  // Preload nilaiRaporSemester cache
+  if (!nilaiRaporSemCache) {
+    try {
+      const _snap = await db.collection('nilaiRaporSemester').get();
+      nilaiRaporSemCache = {};
+      _snap.docs.forEach(d => { nilaiRaporSemCache[d.data().nisn] = d.data(); });
+    } catch (_) { nilaiRaporSemCache = {}; }
+  }
+
   try {
     const siswa = await getSiswaByKelas(currentInputKelas);
     const batch = db.batch();
@@ -3606,8 +3685,12 @@ async function saveAllNilai() {
       data.nilaiUM = umEl && umEl.value !== '' ? umVal : null; // DB: null jika benar-benar kosong
       if (data.nilaiUM !== null) hasData = true;
 
-      // Nilai Ijazah = 60% Rapor + 40% UM (UM kosong = 0)
-      data.nilaiIjazah = data.nilaiRapor !== null ? data.nilaiRapor * 0.6 + umVal * 0.4 : null;
+      // Nilai Ijazah = UM×40% + Rata-rata Raport 5 Semester×60%
+      const _raporSem = (nilaiRaporSemCache || {})[sw.nisn];
+      const _rata5Sem = _raporSem?.rataKeseluruhan ?? null;
+      data.nilaiIjazah = data.nilaiUM !== null && _rata5Sem !== null
+        ? data.nilaiUM * 0.4 + _rata5Sem * 0.6
+        : null;
 
       // Nilai Huruf dan Deskripsi Rapor
       data.nilaiHuruf = getNilaiHuruf(data.nilaiRapor);

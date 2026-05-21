@@ -4145,11 +4145,11 @@ async function exportExcel() {
       if (s.adaUTS) row.push(n.uts ?? '');
       row.push(n.nilaiB    != null ? +n.nilaiB.toFixed(2)    : '');
       row.push(n.nilaiRapor  != null ? +n.nilaiRapor.toFixed(2)  : '');
-      row.push(n.nilaiHuruf  || getNilaiHuruf(n.nilaiRapor));
+      row.push(getNilaiHuruf(n.nilaiRapor));
       row.push(n.nilaiUM     != null ? +n.nilaiUM.toFixed(2)     : '');
       row.push(n.nilaiIjazah != null ? +n.nilaiIjazah.toFixed(2) : '');
-      const hurufSiswa = n.nilaiHuruf || getNilaiHuruf(n.nilaiRapor);
-      row.push(n.deskripsiRapor || getDeskripsiNilai(hurufSiswa, deskripsiMapel));
+      const hurufSiswa = getNilaiHuruf(n.nilaiRapor);
+      row.push(getDeskripsiNilai(hurufSiswa, deskripsiMapel));
       row.push('');
       rows.push(row);
     });
@@ -4539,7 +4539,7 @@ function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, nam
     const n = nilaiSiswa[mapelId];
     if (!n || n.nilaiRapor == null) return '<td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td>';
     const val = (+n.nilaiRapor).toFixed(2);
-    const hur = (n.nilaiHuruf || getNilaiHuruf(n.nilaiRapor)) || '';
+    const hur = getNilaiHuruf(n.nilaiRapor) || '';
     const h = hur === '-' ? '' : hur;
     return `<td class="c">${val}</td><td class="c">${h}</td><td class="c">${val}</td><td class="c">${h}</td>`;
   }

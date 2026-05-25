@@ -527,6 +527,11 @@ body {
 }
 .nilai-computed.rapor { background: #dbeafe; color: #1d4ed8; }
 .nilai-computed.ijazah { background: #fef3c7; color: #92400e; }
+.raport-sem-cell { cursor: pointer; transition: background .15s; }
+.raport-sem-cell:hover { background: #f0fdf9 !important; outline: 1.5px dashed var(--teal); outline-offset: -2px; }
+.raport-sem-cell input { width: 68px; padding: 3px 5px; border: 2px solid var(--teal); border-radius: 4px; font-size: 13px; text-align: center; outline: none; background: white; box-shadow: 0 0 0 3px rgba(15,118,110,0.12); }
+.raport-sem-cell.saving { opacity: .5; pointer-events: none; }
+.raport-sem-cell.saved { background: #d1fae5 !important; transition: background 1s; }
 
 /* ─── SECTION HEADER ─── */
 .section-header {
@@ -3264,18 +3269,23 @@ async function loadRaporSemView() {
         </tr>
       </thead><tbody>`;
 
+    const semCell = (nisn, field, val) => {
+      const raw = val != null && !isNaN(val) ? val : '';
+      return `<td class="raport-sem-cell" data-nisn="${nisn}" data-field="${field}" data-val="${raw}" onclick="editRaporSemCell(this)" title="Klik untuk edit" style="text-align:center;min-width:70px;">${fmt(val)}</td>`;
+    };
+
     ordered.forEach((d, idx) => {
-      html += `<tr>
+      html += `<tr data-nisn="${d.nisn}">
         <td style="text-align:center;">${d._no || idx + 1}</td>
         <td style="font-family:monospace;font-size:12px;">${d.nisn || '-'}</td>
         ${showKelas ? `<td style="text-align:center;">${d._kelas || '-'}</td>` : ''}
         <td class="sticky-col">${d._nama || d.nama || '-'}</td>
-        <td style="text-align:center;">${fmt(d.s1)}</td>
-        <td style="text-align:center;">${fmt(d.s2)}</td>
-        <td style="text-align:center;">${fmt(d.s3)}</td>
-        <td style="text-align:center;">${fmt(d.s4)}</td>
-        <td style="text-align:center;">${fmt(d.s5)}</td>
-        <td style="text-align:center;"><span class="nilai-computed rapor">${fmt(d.rataKeseluruhan)}</span></td>
+        ${semCell(d.nisn, 's1', d.s1)}
+        ${semCell(d.nisn, 's2', d.s2)}
+        ${semCell(d.nisn, 's3', d.s3)}
+        ${semCell(d.nisn, 's4', d.s4)}
+        ${semCell(d.nisn, 's5', d.s5)}
+        <td style="text-align:center;"><span class="nilai-computed rapor" id="rata-${d.nisn}">${fmt(d.rataKeseluruhan)}</span></td>
       </tr>`;
     });
 
@@ -3283,6 +3293,69 @@ async function loadRaporSemView() {
     container.innerHTML = html;
   } catch (e) {
     container.innerHTML = `<div class="empty-state"><p>Error: ${e.message}</p></div>`;
+  }
+}
+
+function editRaporSemCell(cell) {
+  if (cell.querySelector('input')) return;
+  const nisn = cell.dataset.nisn;
+  const field = cell.dataset.field;
+  const currentVal = cell.dataset.val;
+  const displayVal = currentVal !== '' ? parseFloat(currentVal).toFixed(2) : '';
+  cell.innerHTML = `<input type="number" step="0.01" min="0" max="100" value="${displayVal}"
+    onblur="saveRaporSemNilai('${nisn}','${field}',this.value,this)"
+    onkeydown="if(event.key==='Enter'){this.blur()}else if(event.key==='Escape'){loadRaporSemView()}">`;
+  const input = cell.querySelector('input');
+  input.focus();
+  input.select();
+}
+
+async function saveRaporSemNilai(nisn, field, rawVal, inputEl) {
+  const cell = inputEl.closest('td');
+  const trimmed = rawVal.trim();
+  const newVal = trimmed === '' ? null : parseFloat(trimmed);
+  if (newVal !== null && isNaN(newVal)) { loadRaporSemView(); return; }
+
+  const fmt = v => (v != null && !isNaN(v)) ? (+v).toFixed(2) : '-';
+
+  // Collect current row values from sibling cells
+  const row = cell.closest('tr');
+  const vals = { s1: null, s2: null, s3: null, s4: null, s5: null };
+  row.querySelectorAll('.raport-sem-cell').forEach(c => {
+    const v = c.dataset.val;
+    vals[c.dataset.field] = v !== '' ? parseFloat(v) : null;
+  });
+  vals[field] = newVal;
+
+  const semVals = Object.values(vals).filter(v => v !== null && !isNaN(v));
+  const rataKeseluruhan = semVals.length ? semVals.reduce((a, b) => a + b, 0) / semVals.length : null;
+
+  cell.classList.add('saving');
+  cell.innerHTML = fmt(newVal);
+
+  try {
+    await db.collection('nilaiRaporSemester').doc(nisn).update({
+      [field]: newVal, rataKeseluruhan,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Update cache
+    if (nilaiRaporSemCache?.[nisn]) {
+      nilaiRaporSemCache[nisn][field] = newVal;
+      nilaiRaporSemCache[nisn].rataKeseluruhan = rataKeseluruhan;
+    }
+
+    cell.dataset.val = newVal != null ? newVal : '';
+    cell.classList.remove('saving');
+    cell.classList.add('saved');
+    setTimeout(() => cell.classList.remove('saved'), 1200);
+
+    const rataEl = document.getElementById(`rata-${nisn}`);
+    if (rataEl) rataEl.textContent = fmt(rataKeseluruhan);
+  } catch (e) {
+    cell.classList.remove('saving');
+    showToast('Gagal menyimpan: ' + e.message, 'error');
+    loadRaporSemView();
   }
 }
 

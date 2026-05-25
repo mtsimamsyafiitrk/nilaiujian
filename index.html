@@ -3283,7 +3283,7 @@ async function loadRaporSemView() {
       return;
     }
 
-    const fmt = v => (v != null && !isNaN(v)) ? (+v).toFixed(2) : '-';
+    const fmt = v => (v != null && !isNaN(v)) ? Math.round(+v) : '-';
     const showKelas = !kelasFilter;
 
     let html = `<div class="nilai-table-wrap"><table class="nilai-table">
@@ -3337,7 +3337,7 @@ function editRaporSemCell(cell) {
   const nisn = cell.dataset.nisn;
   const field = cell.dataset.field;
   const currentVal = cell.dataset.val;
-  const displayVal = currentVal !== '' ? parseFloat(currentVal).toFixed(2) : '';
+  const displayVal = currentVal !== '' ? String(Math.round(parseFloat(currentVal))) : '';
   cell.innerHTML = `<input type="number" step="0.01" min="0" max="100" value="${displayVal}"
     onblur="saveRaporSemNilai('${nisn}','${field}',this.value,this)"
     onkeydown="if(event.key==='Enter'){this.blur()}else if(event.key==='Escape'){loadRaporSemView()}">`;
@@ -3352,7 +3352,7 @@ async function saveRaporSemNilai(nisn, field, rawVal, inputEl) {
   const newVal = trimmed === '' ? null : parseFloat(trimmed);
   if (newVal !== null && isNaN(newVal)) { loadRaporSemView(); return; }
 
-  const fmt = v => (v != null && !isNaN(v)) ? (+v).toFixed(2) : '-';
+  const fmt = v => (v != null && !isNaN(v)) ? Math.round(+v) : '-';
 
   // Collect current row values from sibling cells
   const row = cell.closest('tr');
@@ -3692,7 +3692,7 @@ async function loadAdminNilaiIjazah() {
       nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat;
     });
 
-    const fmt = v => (v != null && !isNaN(v)) ? (+v).toFixed(2) : '-';
+    const fmt = v => (v != null && !isNaN(v)) ? Math.round(+v) : '-';
 
     // Header baris mapel
     let mapelHeaders = '';
@@ -3761,7 +3761,7 @@ async function exportIjazahExcel() {
     const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
     const nilaiByKey = {};
     nilaiSnap.docs.forEach(d => { const dat = d.data(); nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat; });
-    const fmt = v => (v != null && !isNaN(v)) ? +((+v).toFixed(2)) : '';
+    const fmt = v => (v != null && !isNaN(v)) ? Math.round(+v) : '';
 
     const header = ['No', 'Nomor Peserta', 'NISN', 'Nama'];
     mapelList.forEach(m => header.push(m.nama));
@@ -3818,7 +3818,7 @@ async function exportIjazahPDF() {
     const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
     const nilaiByKey = {};
     nilaiSnap.docs.forEach(d => { const dat = d.data(); nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat; });
-    const fmt = v => (v != null && !isNaN(v)) ? (+v).toFixed(2) : '-';
+    const fmt = v => (v != null && !isNaN(v)) ? Math.round(+v) : '-';
 
     const mapelHeaderHTML = mapelList.map(m => `<th>${m.nama}</th>`).join('');
     const rowsHTML = siswaList.map((sw, idx) => {
@@ -4185,8 +4185,8 @@ function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings, desk
     const n = nilaiMap[sw.nomor] || {};
     const raporVal = n.nilaiRapor  != null ? n.nilaiRapor  : null;
     const huruf    = getNilaiHuruf(raporVal);
-    const rapor    = raporVal != null ? raporVal.toFixed(2) : '-';
-    const um       = n.nilaiUM     != null ? n.nilaiUM.toFixed(2)      : '-';
+    const rapor    = raporVal != null ? String(Math.round(raporVal)) : '-';
+    const um       = n.nilaiUM     != null ? String(Math.round(n.nilaiUM))      : '-';
 
     html += `<tr><td class="sticky-col" title="${sw.nama}">${sw.nama}</td>`;
 
@@ -4316,7 +4316,7 @@ function computeNilai(nomor) {
   const huruf = getNilaiHuruf(rapor);
   const rapEl = document.getElementById(`rap_${nomor}`);
   const hurEl = document.getElementById(`hur_${nomor}`);
-  if (rapEl) rapEl.textContent = rapor !== null ? rapor.toFixed(2) : '-';
+  if (rapEl) rapEl.textContent = rapor !== null ? String(Math.round(rapor)) : '-';
   if (hurEl) {
     hurEl.textContent = huruf;
     hurEl.style.color = getNilaiHurufColor(huruf);
@@ -4487,14 +4487,14 @@ async function exportExcel() {
       const n = nilaiMap[sw.nomor] || {};
       const row = [idx+1, sw.nomor, sw.nisn, sw.nama];
       fKeys.forEach(k => row.push(n[k] ?? ''));
-      row.push(n.nilaiA != null ? +n.nilaiA.toFixed(2) : '');
+      row.push(n.nilaiA != null ? Math.round(n.nilaiA) : '');
       uhKeys.forEach(k => row.push(n[k] ?? ''));
       if (s.adaUTS) row.push(n.uts ?? '');
-      row.push(n.nilaiB    != null ? +n.nilaiB.toFixed(2)    : '');
-      row.push(n.nilaiRapor  != null ? +n.nilaiRapor.toFixed(2)  : '');
+      row.push(n.nilaiB    != null ? Math.round(n.nilaiB)    : '');
+      row.push(n.nilaiRapor  != null ? Math.round(n.nilaiRapor)  : '');
       row.push(getNilaiHuruf(n.nilaiRapor));
-      row.push(n.nilaiUM     != null ? +n.nilaiUM.toFixed(2)     : '');
-      row.push(n.nilaiIjazah != null ? +n.nilaiIjazah.toFixed(2) : '');
+      row.push(n.nilaiUM     != null ? Math.round(n.nilaiUM)     : '');
+      row.push(n.nilaiIjazah != null ? Math.round(n.nilaiIjazah) : '');
       const hurufSiswa = getNilaiHuruf(n.nilaiRapor);
       row.push(getDeskripsiNilai(hurufSiswa, deskripsiMapel));
       row.push('');
@@ -4549,9 +4549,9 @@ async function exportGabungan(type) {
         const n = nilaiAll[s.nomor]?.[m.id];
         const val = n ? (isRapor ? n.nilaiRapor : n.nilaiIjazah) : null;
         if (val != null) { total += val; count++; }
-        row.push(val != null ? +val.toFixed(2) : '');
+        row.push(val != null ? Math.round(val) : '');
       });
-      row.push(+total.toFixed(2), count > 0 ? +(total/count).toFixed(2) : '');
+      row.push(Math.round(total), count > 0 ? Math.round(total/count) : '');
       rows.push(row);
     });
 
@@ -4885,7 +4885,7 @@ function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, nam
   function nilaiCells(mapelId) {
     const n = nilaiSiswa[mapelId];
     if (!n || n.nilaiRapor == null) return '<td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td>';
-    const val = (+n.nilaiRapor).toFixed(2);
+    const val = String(Math.round(+n.nilaiRapor));
     const hur = getNilaiHuruf(n.nilaiRapor) || '';
     const h = hur === '-' ? '' : hur;
     return `<td class="c">${val}</td><td class="c">${h}</td><td class="c">${val}</td><td class="c">${h}</td>`;

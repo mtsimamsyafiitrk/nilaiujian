@@ -3637,6 +3637,26 @@ async function handleRaporSemUpload(event) {
     if (count === 0) throw new Error('Tidak ada data yang dapat dibaca. Pastikan format file sesuai.');
     await batch.commit();
     nilaiRaporSemCache = null;
+    // Recalculate nilaiIjazah for all nilai documents using the new raport data
+    try {
+      const newRaporMap = await getNilaiRaporSemMap();
+      const nilaiSnap = await db.collection('nilai').get();
+      if (!nilaiSnap.empty) {
+        const batch2 = db.batch();
+        let updateCount = 0;
+        nilaiSnap.docs.forEach(doc => {
+          const d = doc.data();
+          const nilaiUM = d.nilaiUM != null ? d.nilaiUM : null;
+          const rs = newRaporMap[d.nisn] || {};
+          const rata = rs.rataKeseluruhan != null ? rs.rataKeseluruhan : null;
+          if (nilaiUM !== null && rata !== null) {
+            batch2.update(doc.ref, { nilaiIjazah: +(nilaiUM * 0.4 + rata * 0.6).toFixed(4) });
+            updateCount++;
+          }
+        });
+        if (updateCount > 0) await batch2.commit();
+      }
+    } catch (_) {}
     closeModal('modal-upload-raport-sem');
     showToast(`${count} data raport semester berhasil diupload ✓`, 'success');
     loadRaporSemView();
@@ -3699,7 +3719,9 @@ async function loadAdminNilaiIjazah() {
       mapelList.forEach(m => {
         const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
         const um = n.nilaiUM != null ? n.nilaiUM : null;
-        const ijazah = um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null;
+        const ijazah = n.nilaiIjazah != null
+          ? n.nilaiIjazah
+          : (um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null);
         if (ijazah !== null) ijazahVals.push(ijazah);
         mapelCells += `<td style="text-align:center;"><span class="nilai-computed ijazah">${fmt(ijazah)}</span></td>`;
       });
@@ -3761,7 +3783,10 @@ async function exportIjazahExcel() {
       mapelList.forEach(m => {
         const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
         const um = n.nilaiUM != null ? n.nilaiUM : null;
-        const ijazah = um !== null && rata !== null ? fmt(um * 0.4 + rata * 0.6) : '';
+        const ijazahRaw = n.nilaiIjazah != null
+          ? n.nilaiIjazah
+          : (um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null);
+        const ijazah = ijazahRaw !== null ? fmt(ijazahRaw) : '';
         if (ijazah !== '') ijazahVals.push(ijazah);
         row.push(ijazah);
       });
@@ -3804,7 +3829,9 @@ async function exportIjazahPDF() {
       mapelList.forEach(m => {
         const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
         const um = n.nilaiUM != null ? n.nilaiUM : null;
-        const ijazah = um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null;
+        const ijazah = n.nilaiIjazah != null
+          ? n.nilaiIjazah
+          : (um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null);
         if (ijazah !== null) ijazahVals.push(ijazah);
         cells += `<td>${ijazah !== null ? fmt(ijazah) : '-'}</td>`;
       });

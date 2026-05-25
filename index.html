@@ -3447,52 +3447,77 @@ async function handleNilaiIjazahUpload(event) {
       getAllSiswa(), getMapelList(), getNilaiRaporSemMap()
     ]);
 
+    // NISN lookup: support leading-zero stripped (Excel saves NISN as number)
     const siswByNisn = {};
-    allSiswa.forEach(sw => { siswByNisn[sw.nisn] = sw; });
+    allSiswa.forEach(sw => {
+      siswByNisn[sw.nisn] = sw;
+      siswByNisn[sw.nisn.replace(/^0+/, '')] = sw;
+    });
 
+    // Mapel lookup: by lowercase name, also strip icon prefix
     const mapelByNama = {};
-    mapelList.forEach(m => { mapelByNama[m.nama.trim().toLowerCase()] = m; });
+    mapelList.forEach(m => {
+      const key = m.nama.trim().toLowerCase();
+      mapelByNama[key] = m;
+      // also index with icon stripped, e.g. "📚 matematika" → "matematika"
+      const noIcon = key.replace(/^[\p{Emoji}\s]+/u, '').trim();
+      if (noIcon !== key) mapelByNama[noIcon] = m;
+    });
 
-    const parseSheet = (ws) => {
-      if (!ws) return [];
+    const diagnose = [];
+
+    const parseSheet = (ws, label) => {
+      if (!ws) { diagnose.push(`Sheet "${label}" tidak ditemukan`); return []; }
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
       let headerIdx = -1;
-      for (let i = 0; i < Math.min(6, rows.length); i++) {
+      for (let i = 0; i < Math.min(8, rows.length); i++) {
         if (rows[i]?.some(c => c && c.toString().toUpperCase().includes('NISN'))) { headerIdx = i; break; }
       }
-      if (headerIdx === -1) return [];
+      if (headerIdx === -1) { diagnose.push(`Kolom NISN tidak ditemukan di sheet "${label}"`); return []; }
+
       const headerRow = rows[headerIdx];
       const nisnColIdx = headerRow.findIndex(h => h && h.toString().toUpperCase().includes('NISN'));
+
       const colToMapel = {};
       headerRow.forEach((h, idx) => {
         if (!h) return;
-        const m = mapelByNama[h.toString().trim().toLowerCase()];
+        const key = h.toString().trim().toLowerCase().replace(/^[\p{Emoji}\s]+/u, '').trim();
+        const m = mapelByNama[h.toString().trim().toLowerCase()] || mapelByNama[key];
         if (m) colToMapel[idx] = m;
       });
+
+      if (!Object.keys(colToMapel).length) {
+        const cols = headerRow.filter(h => h && !['no','nisn','nama siswa','nama','kelas'].includes(h.toString().trim().toLowerCase()));
+        diagnose.push(`Tidak ada nama mapel cocok di sheet "${label}". Kolom di file: [${cols.slice(0,5).join(', ')}]. Mapel di sistem: [${mapelList.slice(0,5).map(m=>m.nama).join(', ')}]`);
+        return [];
+      }
+
       const result = [];
       for (let i = headerIdx + 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row[nisnColIdx] == null) continue;
-        const nisn = row[nisnColIdx].toString().trim();
-        if (!nisn) continue;
+        // Normalize NISN: pad to original length if Excel stripped leading zero
+        const nisnRaw = row[nisnColIdx].toString().trim();
+        if (!nisnRaw) continue;
         Object.entries(colToMapel).forEach(([colIdx, mapel]) => {
           const raw = row[parseInt(colIdx)];
           if (raw == null || raw === '') return;
           const n = parseFloat(raw);
-          if (!isNaN(n)) result.push({ nisn, mapelId: mapel.id, value: Math.min(100, Math.max(0, n)) });
+          if (!isNaN(n)) result.push({ nisn: nisnRaw, mapelId: mapel.id, value: Math.min(100, Math.max(0, n)) });
         });
       }
       return result;
     };
 
-    const umSheetName   = wb.SheetNames.find(n => /nilai\s*um|^um$/i.test(n.trim())) || wb.SheetNames[0];
-    const raportSheetName = wb.SheetNames.find(n => /raport|rapor/i.test(n)) || (wb.SheetNames.length > 1 ? wb.SheetNames[1] : null);
+    // Detect sheets — flexible matching
+    const umSheetName     = wb.SheetNames.find(n => /nilai.?um|^um$/i.test(n.trim())) || wb.SheetNames[0];
+    const raportSheetName = wb.SheetNames.find(n => /raport|rapor/i.test(n.trim())) || (wb.SheetNames.length > 1 ? wb.SheetNames[1] : null);
 
-    const umData     = parseSheet(wb.Sheets[umSheetName]);
-    const raportData = raportSheetName ? parseSheet(wb.Sheets[raportSheetName]) : [];
+    const umData     = parseSheet(wb.Sheets[umSheetName],     umSheetName);
+    const raportData = raportSheetName ? parseSheet(wb.Sheets[raportSheetName], raportSheetName) : [];
 
     if (!umData.length && !raportData.length)
-      throw new Error('Tidak ada data valid. Pastikan sheet "Nilai UM" / "Raport Sem 6" ada, mengandung kolom NISN, dan nama kolom mapel sesuai sistem.');
+      throw new Error(diagnose.length ? diagnose.join(' | ') : 'Tidak ada data valid di file.');
 
     // Merge updates per dokumen nilai
     const updateMap = {};

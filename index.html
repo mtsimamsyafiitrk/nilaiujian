@@ -1827,6 +1827,9 @@ const MAPEL_LIST = [
   { id: 'ILMU_TAJWID',      nama: 'Ilmu Tajwid',                kelompok: 'B', icon: '🔊', urut: 18 },
 ];
 
+// Mapel kelompok B yang masuk perhitungan nilai ijazah
+const IJAZAH_MAPEL_B = new Set(['TAHFIDZ', 'NAHWU', 'ADAB']);
+
 const SISWA_DATA = [
   // IX-A
   {no:1, nomor:'26-34-02-2-0006-0001', nisn:'0119921275', nama:'AHDIM', kelas:'IX-A'},
@@ -3399,7 +3402,8 @@ async function downloadNilaiIjazahTemplate() {
   const btn = document.getElementById('btn-download-ijazah-template');
   if (btn) { btn.textContent = '⏳ Menyiapkan...'; btn.disabled = true; }
   try {
-    const [allSiswa, mapelList] = await Promise.all([getAllSiswa(), getMapelList()]);
+    const [allSiswa, mapelListAll] = await Promise.all([getAllSiswa(), getMapelList()]);
+    const mapelList = mapelListAll.filter(m => m.kelompok !== 'B' || IJAZAH_MAPEL_B.has(m.id));
     const wb = XLSX.utils.book_new();
     const baseHeaders = ['No', 'NISN', 'Nama Siswa', 'Kelas'];
     const mapelHeaders = mapelList.map(m => m.nama);
@@ -3676,12 +3680,13 @@ async function loadAdminNilaiIjazah() {
   }
   container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
-    const [allSiswa, mapelList, nilaiSnap, raporMap] = await Promise.all([
+    const [allSiswa, mapelListAll, nilaiSnap, raporMap] = await Promise.all([
       getAllSiswa(),
       getMapelList(),
       db.collection('nilai').where('kelas', '==', kelas).get(),
       getNilaiRaporSemMap(),
     ]);
+    const mapelList = mapelListAll.filter(m => m.kelompok !== 'B' || IJAZAH_MAPEL_B.has(m.id));
 
     const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
 
@@ -3753,11 +3758,12 @@ async function exportIjazahExcel() {
   if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
   showToast('Menyiapkan export Excel...', '');
   try {
-    const [allSiswa, mapelList, nilaiSnap, raporMap] = await Promise.all([
+    const [allSiswa, mapelListAll, nilaiSnap, raporMap] = await Promise.all([
       getAllSiswa(), getMapelList(),
       db.collection('nilai').where('kelas', '==', kelas).get(),
       getNilaiRaporSemMap(),
     ]);
+    const mapelList = mapelListAll.filter(m => m.kelompok !== 'B' || IJAZAH_MAPEL_B.has(m.id));
     const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
     const nilaiByKey = {};
     nilaiSnap.docs.forEach(d => { const dat = d.data(); nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat; });
@@ -3810,11 +3816,12 @@ async function exportIjazahPDF() {
   if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
   showToast('Menyiapkan PDF...', '');
   try {
-    const [allSiswa, mapelList, nilaiSnap, raporMap] = await Promise.all([
+    const [allSiswa, mapelListAll, nilaiSnap, raporMap] = await Promise.all([
       getAllSiswa(), getMapelList(),
       db.collection('nilai').where('kelas', '==', kelas).get(),
       getNilaiRaporSemMap(),
     ]);
+    const mapelList = mapelListAll.filter(m => m.kelompok !== 'B' || IJAZAH_MAPEL_B.has(m.id));
     const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
     const nilaiByKey = {};
     nilaiSnap.docs.forEach(d => { const dat = d.data(); nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat; });

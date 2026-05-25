@@ -1013,12 +1013,8 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
     <div id="sub-tab-nilai-rapor" class="sub-tab-content active">
       <div class="section-header" style="margin-bottom:8px;">
         <h3>Rekapitulasi Rata-rata Raport Semester 1–5</h3>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input type="file" id="raport-sem-file" accept=".xlsx,.xls" style="display:none;" onchange="handleRaporSemUpload(event)">
-          <button class="btn btn-primary btn-sm" id="upload-raport-sem-btn" onclick="document.getElementById('raport-sem-file').click()">📤 Upload Excel</button>
-        </div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('modal-upload-raport-sem')">📤 Upload Excel</button>
       </div>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">Upload file Excel Rekapitulasi (sheet <strong>Rekapitulasi</strong>). Sistem otomatis memisahkan data per kelas.</p>
       <div class="form-group" style="margin-bottom:12px;">
         <label>Pilih Kelas</label>
         <select id="raport-sem-kelas-select" onchange="loadRaporSemView()">
@@ -1731,6 +1727,32 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
     <div class="modal-footer">
       <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-pindah-rombel')">Batal</button>
       <button class="btn btn-primary" style="flex:2" onclick="doPindahRombel()">Pindahkan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Upload Rekapitulasi Semester -->
+<div id="modal-upload-raport-sem" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3>Upload Rekapitulasi Semester 1–5</h3>
+      <button class="modal-close" onclick="closeModal('modal-upload-raport-sem')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">
+        Upload file Excel Rekapitulasi (sheet <strong>Rekapitulasi</strong>). Sistem otomatis memisahkan data per kelas.
+      </p>
+      <div style="background:#f0fdf8;border:1px solid #b2dfdb;border-radius:8px;padding:12px;margin-bottom:16px;">
+        <p style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--teal);">Format Kolom Excel:</p>
+        <p style="font-size:12px;color:var(--text2);font-family:monospace;line-height:1.8;">No | Nama Siswa | NISN | Sem 1 | Sem 2 | Sem 3 | Sem 4 | Sem 5</p>
+        <p style="font-size:11px;color:var(--text2);margin-top:6px;">Sheet harus bernama <strong>Rekapitulasi</strong> dan header baris mengandung kolom NISN.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="btn btn-outline btn-sm" onclick="downloadRaporSemTemplate()" style="width:100%;justify-content:center;">📥 Download Template Excel</button>
+        <input type="file" id="raport-sem-file" accept=".xlsx,.xls" style="display:none;" onchange="handleRaporSemUpload(event)">
+        <button class="btn btn-primary btn-sm" id="upload-raport-sem-btn" onclick="document.getElementById('raport-sem-file').click()" style="width:100%;justify-content:center;">📤 Pilih & Upload File Excel</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3264,6 +3286,23 @@ async function loadRaporSemView() {
   }
 }
 
+function downloadRaporSemTemplate() {
+  const wb = XLSX.utils.book_new();
+  const data = [
+    ["No", "Nama Siswa", "NISN", "Sem 1 (Kls 7 Ganjil)", "Sem 2 (Kls 7 Genap)", "Sem 3 (Kls 8 Ganjil)", "Sem 4 (Kls 8 Genap)", "Sem 5 (Kls 9 Ganjil)"],
+    [1, "Contoh Siswa 1", "0123456789", 78.50, 80.00, 81.25, 79.75, 82.00],
+    [2, "Contoh Siswa 2", "0123456790", 75.00, 77.50, 76.00, 78.25, 80.50],
+    [3, "Contoh Siswa 3", "0123456791", 82.00, 83.50, 84.00, 85.25, 86.00],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [
+    { wch: 5 }, { wch: 25 }, { wch: 15 },
+    { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 22 }
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, "Rekapitulasi");
+  XLSX.writeFile(wb, "Template_Rekapitulasi_Semester.xlsx");
+}
+
 async function handleRaporSemUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -3318,12 +3357,13 @@ async function handleRaporSemUpload(event) {
     if (count === 0) throw new Error('Tidak ada data yang dapat dibaca. Pastikan format file sesuai.');
     await batch.commit();
     nilaiRaporSemCache = null;
+    closeModal('modal-upload-raport-sem');
     showToast(`${count} data raport semester berhasil diupload ✓`, 'success');
     loadRaporSemView();
   } catch (e) {
     showToast('Gagal upload: ' + e.message, 'error');
   } finally {
-    if (btn) { btn.textContent = '📤 Upload Excel'; btn.disabled = false; }
+    if (btn) { btn.textContent = '📤 Pilih & Upload File Excel'; btn.disabled = false; }
   }
 }
 

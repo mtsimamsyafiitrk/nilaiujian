@@ -1055,6 +1055,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
       <div class="section-header" style="margin-bottom:4px;">
         <h3>Nilai Ijazah</h3>
         <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="openModal('modal-upload-nilai-ijazah')">📤 Upload Nilai</button>
           <button class="btn btn-outline btn-sm" onclick="exportIjazahExcel()">📥 Excel</button>
           <button class="btn btn-gold btn-sm" onclick="exportIjazahPDF()">📄 PDF</button>
         </div>
@@ -1757,6 +1758,41 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
         <button class="btn btn-outline btn-sm" onclick="downloadRaporSemTemplate()" style="width:100%;justify-content:center;">📥 Download Template Excel</button>
         <input type="file" id="raport-sem-file" accept=".xlsx,.xls" style="display:none;" onchange="handleRaporSemUpload(event)">
         <button class="btn btn-primary btn-sm" id="upload-raport-sem-btn" onclick="document.getElementById('raport-sem-file').click()" style="width:100%;justify-content:center;">📤 Pilih & Upload File Excel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Upload Nilai Ijazah (UM + Raport Sem 6) -->
+<div id="modal-upload-nilai-ijazah" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3>Upload Nilai UM & Raport Sem 6</h3>
+      <button class="modal-close" onclick="closeModal('modal-upload-nilai-ijazah')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">
+        Upload Excel sekaligus untuk <strong>Nilai Ujian Madrasah</strong> dan <strong>Nilai Raport Semester 6</strong> semua siswa semua mapel.
+      </p>
+      <div style="background:#f0fdf8;border:1px solid #b2dfdb;border-radius:8px;padding:12px;margin-bottom:16px;">
+        <p style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:6px;">Format File Excel (2 sheet):</p>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:12px;color:var(--text2);">
+            <span style="display:inline-block;background:#7c3aed;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;margin-right:6px;">Sheet 1</span>
+            <strong>Nilai UM</strong> — No | NISN | Nama | Kelas | {Mapel1} | {Mapel2} | ...
+          </div>
+          <div style="font-size:12px;color:var(--text2);">
+            <span style="display:inline-block;background:var(--teal);color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;margin-right:6px;">Sheet 2</span>
+            <strong>Raport Sem 6</strong> — No | NISN | Nama | Kelas | {Mapel1} | {Mapel2} | ...
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--text2);margin-top:8px;">Nama kolom mapel harus <strong>persis sama</strong> dengan nama mapel di sistem. Gunakan template agar terjamin.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button id="btn-download-ijazah-template" class="btn btn-outline btn-sm" onclick="downloadNilaiIjazahTemplate()" style="width:100%;justify-content:center;">📥 Download Template Excel</button>
+        <input type="file" id="nilai-ijazah-file" accept=".xlsx,.xls" style="display:none;" onchange="handleNilaiIjazahUpload(event)">
+        <button class="btn btn-primary btn-sm" id="upload-nilai-ijazah-btn" onclick="document.getElementById('nilai-ijazah-file').click()" style="width:100%;justify-content:center;">📤 Pilih & Upload File Excel</button>
       </div>
     </div>
   </div>
@@ -3356,6 +3392,152 @@ async function saveRaporSemNilai(nisn, field, rawVal, inputEl) {
     cell.classList.remove('saving');
     showToast('Gagal menyimpan: ' + e.message, 'error');
     loadRaporSemView();
+  }
+}
+
+async function downloadNilaiIjazahTemplate() {
+  const btn = document.getElementById('btn-download-ijazah-template');
+  if (btn) { btn.textContent = '⏳ Menyiapkan...'; btn.disabled = true; }
+  try {
+    const [allSiswa, mapelList] = await Promise.all([getAllSiswa(), getMapelList()]);
+    const wb = XLSX.utils.book_new();
+    const baseHeaders = ['No', 'NISN', 'Nama Siswa', 'Kelas'];
+    const mapelHeaders = mapelList.map(m => m.nama);
+    const headers = [...baseHeaders, ...mapelHeaders];
+    const colWidths = [{ wch: 5 }, { wch: 15 }, { wch: 30 }, { wch: 8 }, ...mapelList.map(() => ({ wch: 20 }))];
+
+    const studentRows = allSiswa.map((sw, idx) => [
+      sw.no || idx + 1, sw.nisn, sw.nama, sw.kelas,
+      ...mapelList.map(() => null)
+    ]);
+
+    const makeSheet = (title) => {
+      const ws = XLSX.utils.aoa_to_sheet([
+        [title],
+        ['Isi nilai pada kolom mapel. NISN dan nama kolom mapel harus sesuai dengan data sistem.'],
+        [],
+        headers,
+        ...studentRows
+      ]);
+      ws['!cols'] = colWidths;
+      return ws;
+    };
+
+    XLSX.utils.book_append_sheet(wb, makeSheet('TEMPLATE NILAI UJIAN MADRASAH (UM)'), 'Nilai UM');
+    XLSX.utils.book_append_sheet(wb, makeSheet('TEMPLATE NILAI RAPORT SEMESTER 6'), 'Raport Sem 6');
+    XLSX.writeFile(wb, 'Template_Nilai_Ijazah.xlsx');
+  } catch (e) {
+    showToast('Gagal buat template: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.textContent = '📥 Download Template Excel'; btn.disabled = false; }
+  }
+}
+
+async function handleNilaiIjazahUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+  const btn = document.getElementById('upload-nilai-ijazah-btn');
+  if (btn) { btn.textContent = '⏳ Memproses...'; btn.disabled = true; }
+  try {
+    const arrayBuf = await file.arrayBuffer();
+    const wb = XLSX.read(arrayBuf, { type: 'array' });
+
+    const [allSiswa, mapelList, raporSemMap] = await Promise.all([
+      getAllSiswa(), getMapelList(), getNilaiRaporSemMap()
+    ]);
+
+    const siswByNisn = {};
+    allSiswa.forEach(sw => { siswByNisn[sw.nisn] = sw; });
+
+    const mapelByNama = {};
+    mapelList.forEach(m => { mapelByNama[m.nama.trim().toLowerCase()] = m; });
+
+    const parseSheet = (ws) => {
+      if (!ws) return [];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+      let headerIdx = -1;
+      for (let i = 0; i < Math.min(6, rows.length); i++) {
+        if (rows[i]?.some(c => c && c.toString().toUpperCase().includes('NISN'))) { headerIdx = i; break; }
+      }
+      if (headerIdx === -1) return [];
+      const headerRow = rows[headerIdx];
+      const nisnColIdx = headerRow.findIndex(h => h && h.toString().toUpperCase().includes('NISN'));
+      const colToMapel = {};
+      headerRow.forEach((h, idx) => {
+        if (!h) return;
+        const m = mapelByNama[h.toString().trim().toLowerCase()];
+        if (m) colToMapel[idx] = m;
+      });
+      const result = [];
+      for (let i = headerIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row[nisnColIdx] == null) continue;
+        const nisn = row[nisnColIdx].toString().trim();
+        if (!nisn) continue;
+        Object.entries(colToMapel).forEach(([colIdx, mapel]) => {
+          const raw = row[parseInt(colIdx)];
+          if (raw == null || raw === '') return;
+          const n = parseFloat(raw);
+          if (!isNaN(n)) result.push({ nisn, mapelId: mapel.id, value: Math.min(100, Math.max(0, n)) });
+        });
+      }
+      return result;
+    };
+
+    const umSheetName   = wb.SheetNames.find(n => /nilai\s*um|^um$/i.test(n.trim())) || wb.SheetNames[0];
+    const raportSheetName = wb.SheetNames.find(n => /raport|rapor/i.test(n)) || (wb.SheetNames.length > 1 ? wb.SheetNames[1] : null);
+
+    const umData     = parseSheet(wb.Sheets[umSheetName]);
+    const raportData = raportSheetName ? parseSheet(wb.Sheets[raportSheetName]) : [];
+
+    if (!umData.length && !raportData.length)
+      throw new Error('Tidak ada data valid. Pastikan sheet "Nilai UM" / "Raport Sem 6" ada, mengandung kolom NISN, dan nama kolom mapel sesuai sistem.');
+
+    // Merge updates per dokumen nilai
+    const updateMap = {};
+    umData.forEach(({ nisn, mapelId, value }) => {
+      const sw = siswByNisn[nisn]; if (!sw) return;
+      const key = `${mapelId}_${sw.nomor}`;
+      if (!updateMap[key]) updateMap[key] = { sw, mapelId };
+      updateMap[key].nilaiUM = value;
+    });
+    raportData.forEach(({ nisn, mapelId, value }) => {
+      const sw = siswByNisn[nisn]; if (!sw) return;
+      const key = `${mapelId}_${sw.nomor}`;
+      if (!updateMap[key]) updateMap[key] = { sw, mapelId };
+      updateMap[key].nilaiRapor = value;
+    });
+
+    const batch = db.batch();
+    let count = 0;
+    Object.entries(updateMap).forEach(([docKey, entry]) => {
+      const { sw, mapelId } = entry;
+      const data = {
+        mapelId, nomorPeserta: sw.nomor, nisn: sw.nisn, nama: sw.nama, kelas: sw.kelas,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      if (entry.nilaiUM     !== undefined) data.nilaiUM     = entry.nilaiUM;
+      if (entry.nilaiRapor  !== undefined) data.nilaiRapor  = entry.nilaiRapor;
+
+      const rata5Sem = raporSemMap[sw.nisn]?.rataKeseluruhan ?? null;
+      const umForCalc = entry.nilaiUM !== undefined ? entry.nilaiUM : null;
+      if (umForCalc !== null && rata5Sem !== null)
+        data.nilaiIjazah = umForCalc * 0.4 + rata5Sem * 0.6;
+
+      batch.set(db.collection('nilai').doc(docKey), data, { merge: true });
+      count++;
+    });
+
+    if (count === 0) throw new Error('Tidak ada data yang cocok. Pastikan NISN dan nama mapel sesuai data sistem.');
+    await batch.commit();
+    closeModal('modal-upload-nilai-ijazah');
+    showToast(`${count} data berhasil diupload ✓`, 'success');
+    loadAdminNilaiIjazah();
+  } catch (e) {
+    showToast('Gagal upload: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.textContent = '📤 Pilih & Upload File Excel'; btn.disabled = false; }
   }
 }
 

@@ -976,6 +976,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
         <h3>Rombongan Belajar</h3>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-danger btn-sm" id="btn-fix-kelas" onclick="fixNamaKelas()" style="display:none;">Fix Nama Kelas (XII → IX)</button>
+          <button class="btn btn-gold btn-sm" onclick="urutkanSiswaAbjad('IX-A')">Urutkan IX-A Abjad</button>
           <button class="btn btn-primary btn-sm" onclick="showTambahRombel()">+ Tambah Rombel</button>
         </div>
       </div>
@@ -5419,6 +5420,34 @@ async function checkAndShowFixKelasBtn() {
     const btn = $('btn-fix-kelas');
     if (btn) btn.style.display = (!snap1.empty || !snap2.empty) ? 'inline-flex' : 'none';
   } catch (e) { console.error('checkAndShowFixKelasBtn:', e); }
+}
+
+// ─── URUTKAN SISWA SESUAI ABJAD ───────────────────────
+// Menulis ulang field `no` di Firestore agar urutan (yang dipakai semua
+// tabel: siswa, rapor, ijazah, dsb. — semuanya sort by `no`) menjadi abjad.
+async function urutkanSiswaAbjad(kelas) {
+  if (!confirm(`Urutkan siswa kelas ${kelas} sesuai abjad?\n\nNomor urut (no. absen) akan ditulis ulang 1..N berdasarkan nama. NISN & nomor induk tidak berubah. Perubahan berlaku di semua tabel (siswa, rapor, ijazah).`)) return;
+  const container = $('rombel-list-container');
+  if (container) container.innerHTML = `<div style="padding:16px;"><div style="font-weight:700;margin-bottom:8px;">🔤 Mengurutkan ${kelas} sesuai abjad...</div><div id="urut-log" class="migrasi-log"></div></div>`;
+  const addLog = msg => { const el = $('urut-log'); if (el) { el.innerHTML += `<div>${msg}</div>`; el.scrollTop = el.scrollHeight; } };
+  try {
+    const snap = await db.collection('siswa').where('kelas', '==', kelas).get();
+    if (snap.empty) { showToast(`Tidak ada siswa di kelas ${kelas}`, 'error'); loadRombelTab(); return; }
+    const docs = snap.docs.slice().sort((a, b) =>
+      (a.data().nama || '').localeCompare(b.data().nama || '', 'id', { sensitivity: 'base' }));
+    addLog(`▶ ${docs.length} siswa diurutkan sesuai abjad`);
+    docs.forEach((d, i) => addLog(`&nbsp;&nbsp;${i + 1}. ${d.data().nama}`));
+    await batchCommitChunks(docs, (batch, d) => {
+      const i = docs.indexOf(d);
+      batch.update(d.ref, { no: i + 1, updatedAt: serverTimestamp() });
+    });
+    invalidateSiswaCache();
+    showToast(`Kelas ${kelas} berhasil diurutkan sesuai abjad`, 'success');
+    loadRombelTab();
+  } catch (e) {
+    showToast('Gagal mengurutkan: ' + e.message, 'error');
+    loadRombelTab();
+  }
 }
 
 async function fixNamaKelas() {

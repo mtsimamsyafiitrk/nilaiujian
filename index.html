@@ -2475,12 +2475,22 @@ async function importBulkGuru() {
 // ─── FIRESTORE SISWA HELPERS ──────────────────────────
 
 // FIRESTORE INDEX: siswa [kelas asc, no asc]
-// Kelas IX-A selalu ditampilkan urut abjad nama (nomor absen ditata ulang
-// 1..N di memori), agar konsisten di semua tabel: siswa, rapor, ijazah.
+// Kelas 9A (apa pun penamaannya: "9-A", "IX-A", dll.) selalu ditampilkan urut
+// abjad nama; nomor absen ditata ulang 1..N di memori saat data dibaca, agar
+// konsisten di semua tabel: siswa, rapor, ijazah.
+function isKelas9A(kelas) {
+  const k = (kelas || '').toUpperCase().replace(/[\s.\-_]/g, '');
+  return k === '9A' || k === 'IXA';
+}
 function applySiswaOrder(list) {
-  list.filter(s => s.kelas === 'IX-A')
-    .sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id', { sensitivity: 'base' }))
-    .forEach((s, i) => { s.no = i + 1; });
+  const grup = {};
+  list.forEach(s => { (grup[s.kelas] || (grup[s.kelas] = [])).push(s); });
+  Object.keys(grup).forEach(k => {
+    if (!isKelas9A(k)) return;
+    grup[k]
+      .sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id', { sensitivity: 'base' }))
+      .forEach((s, i) => { s.no = i + 1; });
+  });
   return list.sort((a, b) =>
     a.kelas !== b.kelas ? a.kelas.localeCompare(b.kelas) : (a.no || 0) - (b.no || 0));
 }

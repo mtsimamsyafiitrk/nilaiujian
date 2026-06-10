@@ -1206,6 +1206,12 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
             </div>
           </div>
 
+          <!-- Batas Nilai Kelulusan -->
+          <div class="form-group">
+            <label>Nilai Minimal Kelulusan <span style="font-size:10px;font-weight:400;color:var(--text3);">(rata-rata keseluruhan ≥ nilai ini = LULUS)</span></label>
+            <input type="number" id="rapor-batas-lulus" min="0" max="100" value="55" style="text-align:center;">
+          </div>
+
           <!-- Tanda tangan online -->
           <div class="form-group">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
@@ -4664,6 +4670,7 @@ async function loadGlobalRaporSettings() {
     if (d.tanggal) $('rapor-tanggal').value = d.tanggal;
     if (d.bulan)   $('rapor-bulan').value   = d.bulan;
     if (d.tahun)   $('rapor-tahun').value   = d.tahun;
+    if (d.batasLulus != null) $('rapor-batas-lulus').value = d.batasLulus;
     const toggle = $('ttd-online-toggle');
     if (d.useTtd) {
       toggle.checked = true;
@@ -4693,6 +4700,7 @@ async function saveRaporExportSettings(silent = false) {
     tanggal: ($('rapor-tanggal')?.value || '').trim(),
     bulan:   ($('rapor-bulan')?.value   || '').trim(),
     tahun:   ($('rapor-tahun')?.value   || '').trim(),
+    batasLulus: getBatasLulus(),
     useTtd,
     ttdWali:   useTtd ? (ttdStore.wali   || '') : '',
     ttdKepsek: useTtd ? (ttdStore.kepsek || '') : '',
@@ -4705,6 +4713,14 @@ async function saveRaporExportSettings(silent = false) {
 }
 
 // ─── EXPORT RAPOR PDF ─────────────────────────────────
+const BATAS_LULUS_DEFAULT = 55;
+
+// Ambang rata-rata keseluruhan untuk dinyatakan LULUS (diatur di Editor Identitas)
+function getBatasLulus() {
+  const v = parseFloat($('rapor-batas-lulus')?.value);
+  return isNaN(v) ? BATAS_LULUS_DEFAULT : clamp100(v);
+}
+
 const RAPOR_STRUCTURE = [
   { type: 'group', no: '1', label: "Pendidikan Agama", items: [
     { sub: 'A', id: 'ALQURAN_HADIS',    nama: "Al-Qur'an Hadis" },
@@ -4780,8 +4796,9 @@ async function exportRaporPDF() {
     const useTtd = $('ttd-online-toggle')?.checked;
     const ttdWali   = useTtd ? (ttdStore.wali   || '') : '';
     const ttdKepsek = useTtd ? (ttdStore.kepsek || '') : '';
+    const batasLulus = getBatasLulus();
 
-    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}, sikapSettings, kop, namaWaliKelas, tanggalRapor, ttdWali, ttdKepsek));
+    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}, sikapSettings, kop, namaWaliKelas, tanggalRapor, ttdWali, ttdKepsek, batasLulus));
     const html = `<!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8">
 <title>Rapor ${kelas} - 2025/2026</title>
@@ -4815,7 +4832,7 @@ ${pages.join('\n')}
   }
 }
 
-function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, namaWaliKelas = '', tanggalRapor = '_____________', ttdWali = '', ttdKepsek = '') {
+function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, namaWaliKelas = '', tanggalRapor = '_____________', ttdWali = '', ttdKepsek = '', batasLulus = BATAS_LULUS_DEFAULT) {
   const K = { ...KOP_DEFAULTS, ...kop };
   const SPIRITUAL_MAPEL = ['ALQURAN_HADIS', 'TAUHID', 'FIKIH', 'SKI', 'BAHASA_ARAB'];
   const SOSIAL_MAPEL    = ['PPKN', 'IPS', 'IPA', 'PRAKARYA', 'KHOT', 'BAHASA_INDONESIA', 'BAHASA_INGGRIS'];
@@ -4837,6 +4854,11 @@ function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, nam
     E: 'Belum optimal, jadikan ini motivasi untuk bangkit dan berusaha lebih giat demi masa depan yang lebih cerah.',
   };
   const catatanOtomatis = CATATAN_MAP[hurufKeseluruhan] || '';
+
+  // Keterangan kelulusan otomatis dari rata-rata keseluruhan; kosong jika belum ada nilai
+  const statusLulus = rataRataKeseluruhan != null
+    ? (rataRataKeseluruhan >= batasLulus ? 'LULUS' : 'TIDAK LULUS')
+    : '';
 
   const spiritualAvg   = calcSikapAvg(SPIRITUAL_MAPEL);
   const sosialAvg      = calcSikapAvg(SOSIAL_MAPEL);
@@ -4961,6 +4983,13 @@ ${kopHtml}
   </tr>
   <tr>
     <td>Tanpa Keterangan</td><td style="text-align:center">0</td><td style="text-align:center">Hari</td>
+  </tr>
+</table>
+
+<table class="b" style="margin-bottom:10px">
+  <tr>
+    <td style="padding:5px 10px;">Berdasarkan hasil yang dicapai pada semester ganjil dan genap, peserta didik dinyatakan :</td>
+    <td style="width:150px;text-align:center;vertical-align:middle;font-weight:bold;font-size:12pt;letter-spacing:1px;">${statusLulus || '&nbsp;'}</td>
   </tr>
 </table>
 

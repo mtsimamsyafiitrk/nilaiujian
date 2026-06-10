@@ -1885,6 +1885,86 @@ let rombelCache = null;      // null = not loaded yet; array when loaded
 let currentNilaiSettings = null;
 let nilaiRaporSemCache = null; // null = belum dimuat; map nisn→data jika sudah
 
+// ─── HELPERS UMUM ─────────────────────────────────────
+const $ = id => document.getElementById(id);
+const serverTimestamp = () => firebase.firestore.FieldValue.serverTimestamp();
+const clamp100 = v => Math.min(100, Math.max(0, v));
+// Format angka nilai: bulatkan, atau placeholder jika kosong/bukan angka
+const fmtNilai = (v, empty = '-') => (v != null && !isNaN(v)) ? Math.round(+v) : empty;
+const loadingHTML = (text = '') => `<div class="loading"><div class="spinner"></div>${text}</div>`;
+const emptyStateHTML = (icon, text) =>
+  `<div class="empty-state">${icon ? `<div class="icon">${icon}</div>` : ''}<p>${text}</p></div>`;
+
+// Formula ijazah: UM × 40% + rata-rata raport 5 semester × 60%
+const hitungNilaiIjazah = (um, rata5Sem) =>
+  (um !== null && rata5Sem !== null) ? um * 0.4 + rata5Sem * 0.6 : null;
+
+// Nilai ijazah siswa untuk satu mapel: pakai nilai tersimpan, fallback hitung dari UM
+function getIjazahValue(n, rata5Sem) {
+  if (n.nilaiIjazah != null) return n.nilaiIjazah;
+  const um = n.nilaiUM != null ? n.nilaiUM : null;
+  return hitungNilaiIjazah(um, rata5Sem);
+}
+
+// Key kolom input nilai sesuai pengaturan mapel (jumlah tugas/UH/UTS)
+function getNilaiKeys(s) {
+  const fKeys = Array.from({ length: s.jumlahTugas }, (_, i) => `f${i + 1}`);
+  const uhKeys = Array.from({ length: s.jumlahUH }, (_, i) => `uh${i + 1}`);
+  const sumatifKeys = s.adaUTS ? [...uhKeys, 'uts'] : uhKeys;
+  return { fKeys, uhKeys, sumatifKeys };
+}
+
+// Rata-rata komponen: null jika semua nilai kosong; nilai kosong dihitung 0
+const rataKomponen = (vals, pembagi) =>
+  vals.some(v => v !== null) ? vals.reduce((a, b) => a + (b ?? 0), 0) / pembagi : null;
+
+// Nilai rapor dari rata-rata formatif (A) dan sumatif (B) sesuai bobot
+function hitungNilaiRapor(A, B, s) {
+  if (A !== null && B !== null) return (A * s.bobotFormatif + B * s.bobotSumatif) / 100;
+  if (A !== null) return A;
+  return B; // bisa null jika keduanya kosong
+}
+
+// Commit operasi Firestore secara batch per 500 dokumen (limit batch Firestore)
+async function batchCommitChunks(items, apply) {
+  const CHUNK = 500;
+  for (let i = 0; i < items.length; i += CHUNK) {
+    const batch = db.batch();
+    items.slice(i, i + CHUNK).forEach(item => apply(batch, item));
+    await batch.commit();
+  }
+}
+
+// Buat akun auth guru baru via app sekunder agar sesi admin tidak ikut berganti
+async function createGuruAccount(email, pass, profile) {
+  const secondaryApp = firebase.initializeApp(firebase.app().options, 'secondary_' + Date.now() + '_' + Math.floor(Math.random() * 1e6));
+  const cred = await secondaryApp.auth().createUserWithEmailAndPassword(email, pass);
+  await db.collection('users').doc(cred.user.uid).set({ ...profile, email, role: 'guru' });
+  await secondaryApp.delete();
+}
+
+// Isi/baca form pengaturan bobot nilai (prefix: 'def', 'mp', atau 'guru-mp')
+function fillBobotForm(prefix, data) {
+  $(`${prefix}-jumlah-tugas`).value = data.jumlahTugas;
+  $(`${prefix}-jumlah-uh`).value = data.jumlahUH;
+  $(`${prefix}-ada-uts`).checked = data.adaUTS;
+  $(`${prefix}-bobot-formatif`).value = data.bobotFormatif;
+  $(`${prefix}-bobot-formatif-label`).textContent = data.bobotFormatif;
+  $(`${prefix}-bobot-sumatif-label`).textContent = data.bobotSumatif;
+}
+function readBobotForm(prefix) {
+  const bobotF = parseInt($(`${prefix}-bobot-formatif`).value) || 60;
+  return {
+    jumlahTugas: parseInt($(`${prefix}-jumlah-tugas`).value) || 6,
+    jumlahUH:    parseInt($(`${prefix}-jumlah-uh`).value) || 7,
+    adaUTS:      $(`${prefix}-ada-uts`).checked,
+    bobotFormatif: bobotF,
+    bobotSumatif: 100 - bobotF,
+    updatedBy: currentUser?.uid || '',
+    updatedAt: serverTimestamp(),
+  };
+}
+
 // ─── FIREBASE CONFIG (HARDCODED) ─────────────────────
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDy16P6DLndw1JIFBNZrYwy2hkLAuopb9E",
@@ -1918,7 +1998,7 @@ function initFirebase() {
 // ─── PAGE NAVIGATION ──────────────────────────────────
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  $(id).classList.add('active');
 }
 
 function switchTab(tab) {
@@ -1926,7 +2006,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   const activeTab = document.querySelector(`[onclick="switchTab('${tab}')"]`);
   if (activeTab) activeTab.classList.add('active');
-  const el = document.getElementById(`tab-${tab}`);
+  const el = $(`tab-${tab}`);
   if (el) el.classList.add('active');
 
   if (tab === 'guru') loadGuruList();
@@ -1940,10 +2020,10 @@ function switchTab(tab) {
 
 // ─── AUTH ─────────────────────────────────────────────
 async function doLogin() {
-  const email = document.getElementById('login-email').value.trim();
-  const pass = document.getElementById('login-password').value;
-  const errEl = document.getElementById('login-error');
-  const btn = document.getElementById('login-btn');
+  const email = $('login-email').value.trim();
+  const pass = $('login-password').value;
+  const errEl = $('login-error');
+  const btn = $('login-btn');
   errEl.style.display = 'none';
   btn.textContent = 'Memuat...'; btn.disabled = true;
   try {
@@ -1991,7 +2071,7 @@ async function checkUserRole(uid) {
         } catch (_) {
           currentGuruMapel = normalizeGuruMapel(data.mapel || []);
         }
-        document.getElementById('guru-name-topbar').textContent = data.nama || currentUser.email;
+        $('guru-name-topbar').textContent = data.nama || currentUser.email;
         showPage('page-guru');
         loadGuruMapelList();
       }
@@ -2017,13 +2097,13 @@ async function loadAdminDashboard() {
       db.collection('users').where('role', '==', 'guru').get(),
       getAllSiswa(),
     ]);
-    document.getElementById('stat-guru').textContent = guruSnap.size;
-    document.getElementById('stat-siswa').textContent = allSiswa.length;
+    $('stat-guru').textContent = guruSnap.size;
+    $('stat-siswa').textContent = allSiswa.length;
     const mapelList = await getMapelList();
-    document.getElementById('stat-mapel').textContent = mapelList.length;
+    $('stat-mapel').textContent = mapelList.length;
 
     const total = allSiswa.length;
-    const progressList = document.getElementById('admin-progress-list');
+    const progressList = $('admin-progress-list');
     progressList.innerHTML = '';
     let completed = 0;
 
@@ -2046,7 +2126,7 @@ async function loadAdminDashboard() {
         </div>`;
       progressList.appendChild(div);
     }
-    document.getElementById('stat-input').textContent = completed;
+    $('stat-input').textContent = completed;
   } catch (e) {
     console.error(e);
   }
@@ -2054,8 +2134,8 @@ async function loadAdminDashboard() {
 
 // ─── ADMIN: GURU MANAGEMENT ───────────────────────────
 async function loadGuruList() {
-  const card = document.getElementById('guru-list-card');
-  card.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const card = $('guru-list-card');
+  card.innerHTML = loadingHTML();
   try {
     const [snap, mapelList] = await Promise.all([
       db.collection('users').where('role', '==', 'guru').get(),
@@ -2075,7 +2155,7 @@ async function loadGuruList() {
     });
 
     if (guruList.length === 0) {
-      card.innerHTML = '<div class="empty-state"><div class="icon">👨‍🏫</div><p>Belum ada guru</p></div>';
+      card.innerHTML = emptyStateHTML('👨‍🏫', 'Belum ada guru');
       return;
     }
     card.innerHTML = '';
@@ -2104,13 +2184,13 @@ async function loadGuruList() {
       card.appendChild(div);
     });
   } catch (e) {
-    card.innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>${e.message}</p></div>`;
+    card.innerHTML = emptyStateHTML("❌", e.message);
   }
 }
 
 async function populateMapelChips(selectedMapel = []) {
   const [kelasList, mapelList] = await Promise.all([getUniqueKelas(), getMapelList()]);
-  const container = document.getElementById('mapel-chips-container');
+  const container = $('mapel-chips-container');
   container.innerHTML = '';
   // Build lookup: mapelId → kelas[]
   const selectedMap = {};
@@ -2140,7 +2220,7 @@ async function populateMapelChips(selectedMapel = []) {
 
 function toggleMapelChipGroup(mapelId) {
   const chip = document.querySelector(`.mapel-chip[data-id="${mapelId}"]`);
-  const wrap = document.getElementById(`kelaswrap-${mapelId}`);
+  const wrap = $(`kelaswrap-${mapelId}`);
   if (!chip || !wrap) return;
   const nowSelected = !chip.classList.contains('selected');
   chip.classList.toggle('selected', nowSelected);
@@ -2153,7 +2233,7 @@ function getSelectedMapelChips() {
   const result = [];
   document.querySelectorAll('.mapel-chip.selected').forEach(chip => {
     const mapelId = chip.dataset.id;
-    const wrap = document.getElementById(`kelaswrap-${mapelId}`);
+    const wrap = $(`kelaswrap-${mapelId}`);
     const kelas = wrap ? [...wrap.querySelectorAll('input[type="checkbox"]:checked')].map(cb => cb.value) : [];
     result.push({ mapelId, kelas });
   });
@@ -2161,30 +2241,30 @@ function getSelectedMapelChips() {
 }
 
 async function showAddGuru() {
-  document.getElementById('modal-guru-title').textContent = 'Tambah Guru';
-  document.getElementById('edit-guru-uid').value = '';
-  document.getElementById('guru-nama').value = '';
-  document.getElementById('guru-email').value = '';
-  document.getElementById('guru-password').value = '';
-  document.getElementById('guru-password-group').style.display = 'block';
-  document.getElementById('guru-mapel-readonly-wrap').style.display = 'none';
+  $('modal-guru-title').textContent = 'Tambah Guru';
+  $('edit-guru-uid').value = '';
+  $('guru-nama').value = '';
+  $('guru-email').value = '';
+  $('guru-password').value = '';
+  $('guru-password-group').style.display = 'block';
+  $('guru-mapel-readonly-wrap').style.display = 'none';
   openModal('modal-guru');
 }
 
 async function editGuru(uid) {
   const guru = guruList.find(g => g.uid === uid);
   if (!guru) return;
-  document.getElementById('modal-guru-title').textContent = 'Edit Guru';
-  document.getElementById('edit-guru-uid').value = uid;
-  document.getElementById('guru-nama').value = guru.nama;
-  document.getElementById('guru-email').value = guru.email;
-  document.getElementById('guru-password').value = '';
-  document.getElementById('guru-password-group').style.display = 'none';
+  $('modal-guru-title').textContent = 'Edit Guru';
+  $('edit-guru-uid').value = uid;
+  $('guru-nama').value = guru.nama;
+  $('guru-email').value = guru.email;
+  $('guru-password').value = '';
+  $('guru-password-group').style.display = 'none';
 
   // Show read-only subject badges derived from mapel collection
   const mapelList = await getMapelList();
-  const badgesEl = document.getElementById('guru-mapel-readonly-badges');
-  const wrapEl = document.getElementById('guru-mapel-readonly-wrap');
+  const badgesEl = $('guru-mapel-readonly-badges');
+  const wrapEl = $('guru-mapel-readonly-wrap');
   badgesEl.innerHTML = '';
   mapelList.forEach(m => {
     const matched = (m.kelas || []).filter(k => k.guruUid === uid);
@@ -2204,11 +2284,11 @@ async function editGuru(uid) {
 }
 
 async function saveGuru() {
-  const uid = document.getElementById('edit-guru-uid').value;
-  const nama = document.getElementById('guru-nama').value.trim();
-  const email = document.getElementById('guru-email').value.trim();
-  const pass = document.getElementById('guru-password').value;
-  const btn = document.getElementById('save-guru-btn');
+  const uid = $('edit-guru-uid').value;
+  const nama = $('guru-nama').value.trim();
+  const email = $('guru-email').value.trim();
+  const pass = $('guru-password').value;
+  const btn = $('save-guru-btn');
 
   if (!nama || !email) { showToast('Nama dan email wajib diisi', 'error'); return; }
   if (!uid && pass.length < 6) { showToast('Password min. 6 karakter', 'error'); return; }
@@ -2219,12 +2299,7 @@ async function saveGuru() {
       await db.collection('users').doc(uid).update({ nama });
       showToast('Data guru diperbarui ✓', 'success');
     } else {
-      // Create new auth user & profile using a secondary app temporarily
-      const secondaryApp = firebase.initializeApp(firebase.app().options, 'secondary_' + Date.now());
-      const secAuth = secondaryApp.auth();
-      const cred = await secAuth.createUserWithEmailAndPassword(email, pass);
-      await db.collection('users').doc(cred.user.uid).set({ nama, email, role: 'guru' });
-      await secondaryApp.delete();
+      await createGuruAccount(email, pass, { nama });
       showToast('Akun guru berhasil dibuat ✓', 'success');
     }
     closeModal('modal-guru');
@@ -2251,9 +2326,9 @@ let bulkGuruData = [];
 
 function showBulkUploadGuru() {
   bulkGuruData = [];
-  document.getElementById('bulk-guru-file').value = '';
-  document.getElementById('bulk-guru-preview').style.display = 'none';
-  document.getElementById('import-bulk-btn').disabled = true;
+  $('bulk-guru-file').value = '';
+  $('bulk-guru-preview').style.display = 'none';
+  $('import-bulk-btn').disabled = true;
   openModal('modal-bulk-guru');
 }
 
@@ -2283,7 +2358,7 @@ function parseBulkGuruExcel(input) {
       const currentMapelList = mapelCache || MAPEL_LIST;
       const validMapelIds = new Set(currentMapelList.map(m => m.id));
       bulkGuruData = [];
-      const tbody = document.getElementById('bulk-guru-tbody');
+      const tbody = $('bulk-guru-tbody');
       tbody.innerHTML = '';
       let errorCount = 0;
 
@@ -2338,10 +2413,10 @@ function parseBulkGuruExcel(input) {
       }
 
       const validCount = bulkGuruData.filter(r => r.ok).length;
-      document.getElementById('bulk-guru-count').textContent = bulkGuruData.length;
-      document.getElementById('bulk-guru-preview').style.display = 'block';
+      $('bulk-guru-count').textContent = bulkGuruData.length;
+      $('bulk-guru-preview').style.display = 'block';
 
-      const badge = document.getElementById('bulk-guru-error-badge');
+      const badge = $('bulk-guru-error-badge');
       if (errorCount > 0) {
         badge.textContent = `${errorCount} baris error`;
         badge.style.display = 'inline';
@@ -2349,7 +2424,7 @@ function parseBulkGuruExcel(input) {
         badge.style.display = 'none';
       }
 
-      const importBtn = document.getElementById('import-bulk-btn');
+      const importBtn = $('import-bulk-btn');
       importBtn.disabled = validCount === 0;
       importBtn.textContent = validCount > 0
         ? `Import ${validCount} Guru` + (errorCount > 0 ? ` (lewati ${errorCount} error)` : '')
@@ -2365,7 +2440,7 @@ async function importBulkGuru() {
   const validRows = bulkGuruData.filter(r => r.ok);
   if (validRows.length === 0) return;
 
-  const btn = document.getElementById('import-bulk-btn');
+  const btn = $('import-bulk-btn');
   btn.disabled = true;
   btn.textContent = `Mengimpor 0/${validRows.length}...`;
 
@@ -2374,11 +2449,7 @@ async function importBulkGuru() {
     const { nama, email, pass, mapel } = validRows[i];
     btn.textContent = `Mengimpor ${i + 1}/${validRows.length}...`;
     try {
-      const secondaryApp = firebase.initializeApp(firebase.app().options, 'bulk_' + Date.now());
-      const secAuth = secondaryApp.auth();
-      const cred = await secAuth.createUserWithEmailAndPassword(email, pass);
-      await db.collection('users').doc(cred.user.uid).set({ nama, email, mapel, role: 'guru' });
-      await secondaryApp.delete();
+      await createGuruAccount(email, pass, { nama, mapel });
       success++;
     } catch (e) {
       console.error(`Gagal import ${email}:`, e.message);
@@ -2442,8 +2513,8 @@ async function seedMapelIfEmpty() {
       batch.set(ref, {
         kode: m.id, nama: m.nama, icon: m.icon, kelompok: m.kelompok, urut: m.urut,
         kelas: [],
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
     });
     await batch.commit();
@@ -2471,8 +2542,8 @@ async function seedSiswaIfEmpty() {
     const ref = db.collection('siswa').doc(s.nomor);
     batch.set(ref, {
       no: s.no, nomor: s.nomor, nisn: s.nisn, nama: s.nama, kelas: s.kelas,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
   });
   await batch.commit();
@@ -2488,13 +2559,12 @@ async function initSiswaTab() {
     // Seed silently — if Firestore rules don't allow it yet, getAllSiswa() falls back to SISWA_DATA
     try { await seedSiswaIfEmpty(); } catch (_) {}
     const kelasList = await getUniqueKelas();
-    // Populate kelas select in forms
-    ['siswa-kelas'].forEach(id => {
-      const sel = document.getElementById(id);
-      if (!sel) return;
-      sel.innerHTML = '<option value="">-- Pilih Kelas --</option>';
-      kelasList.forEach(k => sel.innerHTML += `<option value="${k}">${k}</option>`);
-    });
+    // Populate kelas select in form tambah/edit siswa
+    const kelasSel = $('siswa-kelas');
+    if (kelasSel) {
+      kelasSel.innerHTML = '<option value="">-- Pilih Kelas --</option>';
+      kelasList.forEach(k => kelasSel.innerHTML += `<option value="${k}">${k}</option>`);
+    }
     renderKelasFilterTabs(kelasList);
     selectedSiswaIds.clear();
     updateDeleteSelectedBtn();
@@ -2506,7 +2576,7 @@ async function initSiswaTab() {
 }
 
 function renderKelasFilterTabs(kelasList) {
-  const tabsEl = document.getElementById('siswa-kelas-tabs');
+  const tabsEl = $('siswa-kelas-tabs');
   tabsEl.innerHTML = '';
   kelasList.forEach((k, i) => {
     const btn = document.createElement('button');
@@ -2525,13 +2595,13 @@ async function loadSiswaList(kelas) {
     b.className = b.id === `kelas-tab-${kelas}` ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
   });
 
-  const card = document.getElementById('siswa-list-card');
-  card.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const card = $('siswa-list-card');
+  card.innerHTML = loadingHTML();
   try {
     const siswa = await getSiswaByKelas(kelas);
 
     if (siswa.length === 0) {
-      card.innerHTML = '<div class="empty-state"><div class="icon">🎓</div><p>Belum ada siswa di kelas ini</p></div>';
+      card.innerHTML = emptyStateHTML('🎓', 'Belum ada siswa di kelas ini');
       return;
     }
 
@@ -2569,7 +2639,7 @@ async function loadSiswaList(kelas) {
       card.appendChild(div);
     });
   } catch (e) {
-    card.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+    card.innerHTML = emptyStateHTML("", e.message);
   }
 }
 
@@ -2579,7 +2649,7 @@ function toggleSiswaSelect(nomor, checked) {
   updateDeleteSelectedBtn();
   // Update select-all state
   const allChecks = document.querySelectorAll('.siswa-check');
-  const selectAll = document.getElementById('select-all-siswa');
+  const selectAll = $('select-all-siswa');
   if (selectAll) selectAll.checked = allChecks.length > 0 && [...allChecks].every(c => c.checked);
 }
 
@@ -2594,8 +2664,8 @@ function toggleSelectAll(checked) {
 }
 
 function updateDeleteSelectedBtn() {
-  const bar = document.getElementById('siswa-delete-bar');
-  const btn = document.getElementById('btn-hapus-terpilih');
+  const bar = $('siswa-delete-bar');
+  const btn = $('btn-hapus-terpilih');
   const n = selectedSiswaIds.size;
   bar.style.display = n > 0 ? 'flex' : 'none';
   if (btn) btn.textContent = `Hapus Terpilih (${n})`;
@@ -2607,12 +2677,7 @@ async function deleteSelectedSiswa() {
   if (!confirm(`Hapus ${n} siswa terpilih? Data nilai mereka tidak ikut terhapus.`)) return;
 
   const ids = [...selectedSiswaIds];
-  const CHUNK = 500;
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const batch = db.batch();
-    ids.slice(i, i + CHUNK).forEach(nomor => batch.delete(db.collection('siswa').doc(nomor)));
-    await batch.commit();
-  }
+  await batchCommitChunks(ids, (batch, nomor) => batch.delete(db.collection('siswa').doc(nomor)));
   selectedSiswaIds.clear();
   invalidateSiswaCache();
   showToast(`${n} siswa berhasil dihapus`, 'success');
@@ -2621,38 +2686,38 @@ async function deleteSelectedSiswa() {
 }
 
 function showAddSiswa() {
-  document.getElementById('modal-siswa-form-title').textContent = 'Tambah Siswa';
-  document.getElementById('edit-siswa-nomor').value = '';
-  document.getElementById('siswa-nama').value = '';
-  document.getElementById('siswa-nisn').value = '';
-  document.getElementById('siswa-nomor').value = '';
-  document.getElementById('siswa-no').value = '';
-  document.getElementById('siswa-kelas').value = '';
+  $('modal-siswa-form-title').textContent = 'Tambah Siswa';
+  $('edit-siswa-nomor').value = '';
+  $('siswa-nama').value = '';
+  $('siswa-nisn').value = '';
+  $('siswa-nomor').value = '';
+  $('siswa-no').value = '';
+  $('siswa-kelas').value = '';
   openModal('modal-siswa-form');
 }
 
 function editSiswa(nomor) {
   const s = (siswaCache || []).find(x => x.nomor === nomor);
   if (!s) return;
-  document.getElementById('modal-siswa-form-title').textContent = 'Edit Siswa';
-  document.getElementById('edit-siswa-nomor').value = nomor;
-  document.getElementById('siswa-nama').value = s.nama;
-  document.getElementById('siswa-nisn').value = s.nisn;
-  document.getElementById('siswa-nomor').value = s.nomor;
-  document.getElementById('siswa-no').value = s.no;
-  document.getElementById('siswa-kelas').value = s.kelas;
+  $('modal-siswa-form-title').textContent = 'Edit Siswa';
+  $('edit-siswa-nomor').value = nomor;
+  $('siswa-nama').value = s.nama;
+  $('siswa-nisn').value = s.nisn;
+  $('siswa-nomor').value = s.nomor;
+  $('siswa-no').value = s.no;
+  $('siswa-kelas').value = s.kelas;
   openModal('modal-siswa-form');
 }
 
 async function saveSiswa() {
-  const editNomor = document.getElementById('edit-siswa-nomor').value;
-  const nama = document.getElementById('siswa-nama').value.trim().toUpperCase();
-  const nisnRaw = document.getElementById('siswa-nisn').value.trim();
-  const nomor = document.getElementById('siswa-nomor').value.trim();
-  const kelas = document.getElementById('siswa-kelas').value;
-  const no = parseInt(document.getElementById('siswa-no').value) || 0;
+  const editNomor = $('edit-siswa-nomor').value;
+  const nama = $('siswa-nama').value.trim().toUpperCase();
+  const nisnRaw = $('siswa-nisn').value.trim();
+  const nomor = $('siswa-nomor').value.trim();
+  const kelas = $('siswa-kelas').value;
+  const no = parseInt($('siswa-no').value) || 0;
   const nisn = nisnRaw.padStart(10, '0');
-  const btn = document.getElementById('save-siswa-btn');
+  const btn = $('save-siswa-btn');
 
   if (!nama) { showToast('Nama wajib diisi', 'error'); return; }
   if (nisn.length !== 10 || !/^\d{10}$/.test(nisn)) { showToast('NISN harus 10 digit angka', 'error'); return; }
@@ -2662,8 +2727,8 @@ async function saveSiswa() {
 
   btn.textContent = 'Menyimpan...'; btn.disabled = true;
   try {
-    const data = { no, nomor, nisn, nama, kelas, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-    if (!editNomor) data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    const data = { no, nomor, nisn, nama, kelas, updatedAt: serverTimestamp() };
+    if (!editNomor) data.createdAt = serverTimestamp();
     await db.collection('siswa').doc(nomor).set(data, { merge: true });
     // If nomor changed during edit, delete old doc
     if (editNomor && editNomor !== nomor) await db.collection('siswa').doc(editNomor).delete();
@@ -2707,9 +2772,9 @@ function downloadTemplateSiswa() {
 
 function showImportSiswa() {
   bulkSiswaData = [];
-  document.getElementById('import-siswa-file').value = '';
-  document.getElementById('import-siswa-preview').style.display = 'none';
-  document.getElementById('do-import-siswa-btn').disabled = true;
+  $('import-siswa-file').value = '';
+  $('import-siswa-preview').style.display = 'none';
+  $('do-import-siswa-btn').disabled = true;
   openModal('modal-import-siswa');
 }
 
@@ -2748,7 +2813,7 @@ function parseSiswaFile(input) {
       } catch (_) {}
 
       bulkSiswaData = [];
-      const tbody = document.getElementById('import-siswa-tbody');
+      const tbody = $('import-siswa-tbody');
       tbody.innerHTML = '';
       let errorCount = 0;
 
@@ -2793,20 +2858,20 @@ function parseSiswaFile(input) {
       }
 
       const validCount = bulkSiswaData.filter(r => r.ok).length;
-      document.getElementById('import-siswa-count').textContent = bulkSiswaData.length;
+      $('import-siswa-count').textContent = bulkSiswaData.length;
 
       // Summary per kelas
       const byKelas = {};
       bulkSiswaData.filter(r => r.ok).forEach(r => { byKelas[r.kelas] = (byKelas[r.kelas] || 0) + 1; });
-      document.getElementById('import-siswa-summary').innerHTML = Object.entries(byKelas).map(([k, n]) =>
+      $('import-siswa-summary').innerHTML = Object.entries(byKelas).map(([k, n]) =>
         `<span class="badge badge-teal" style="margin-right:4px;">${k}: ${n} siswa</span>`).join('');
 
-      const badge = document.getElementById('import-siswa-error-badge');
+      const badge = $('import-siswa-error-badge');
       badge.style.display = errorCount > 0 ? 'inline' : 'none';
       badge.textContent = `${errorCount} baris error`;
 
-      document.getElementById('import-siswa-preview').style.display = 'block';
-      const btn = document.getElementById('do-import-siswa-btn');
+      $('import-siswa-preview').style.display = 'block';
+      const btn = $('do-import-siswa-btn');
       btn.disabled = validCount === 0;
       btn.textContent = validCount > 0
         ? `Import ${validCount} Siswa` + (errorCount > 0 ? ` (lewati ${errorCount})` : '')
@@ -2823,7 +2888,7 @@ async function importSiswa() {
   if (validRows.length === 0) return;
 
   const mode = document.querySelector('input[name="import-mode"]:checked')?.value || 'add';
-  const btn = document.getElementById('do-import-siswa-btn');
+  const btn = $('do-import-siswa-btn');
   btn.disabled = true;
   btn.textContent = 'Memproses...';
 
@@ -2835,7 +2900,7 @@ async function importSiswa() {
       newRombels.forEach(kelasNama => {
         rbBatch.set(db.collection('rombel').doc(kelasNama), {
           nama: kelasNama,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdAt: serverTimestamp(),
         });
       });
       await rbBatch.commit();
@@ -2847,29 +2912,19 @@ async function importSiswa() {
       const affectedKelas = [...new Set(validRows.map(r => r.kelas))];
       for (const kelas of affectedKelas) {
         const snap = await db.collection('siswa').where('kelas', '==', kelas).get();
-        const CHUNK = 500;
-        for (let i = 0; i < snap.docs.length; i += CHUNK) {
-          const batch = db.batch();
-          snap.docs.slice(i, i + CHUNK).forEach(d => batch.delete(d.ref));
-          await batch.commit();
-        }
+        await batchCommitChunks(snap.docs, (batch, d) => batch.delete(d.ref));
       }
     }
 
     // Import in batches of 500
-    const CHUNK = 500;
-    for (let i = 0; i < validRows.length; i += CHUNK) {
-      const batch = db.batch();
-      validRows.slice(i, i + CHUNK).forEach(r => {
-        const ref = db.collection('siswa').doc(r.nomor);
-        batch.set(ref, {
-          no: r.no || 0, nomor: r.nomor, nisn: r.nisn, nama: r.nama, kelas: r.kelas,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        }, { merge: mode === 'add' });
-      });
-      await batch.commit();
-    }
+    await batchCommitChunks(validRows, (batch, r) => {
+      const ref = db.collection('siswa').doc(r.nomor);
+      batch.set(ref, {
+        no: r.no || 0, nomor: r.nomor, nisn: r.nisn, nama: r.nama, kelas: r.kelas,
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+      }, { merge: mode === 'add' });
+    });
 
     invalidateSiswaCache();
     closeModal('modal-import-siswa');
@@ -2940,7 +2995,7 @@ async function getMapelSettings(mapelId, kelasId = null) {
 function populateKelasSelect(selectId, emptyLabel = 'Semua Kelas', afterPopulate = null) {
   getAllSiswa().then(all => {
     const kelasList = [...new Set(all.map(s => s.kelas))].sort();
-    const sel = document.getElementById(selectId);
+    const sel = $(selectId);
     if (!sel) return;
     const prev = sel.value || localStorage.getItem(`lastKelas_${selectId}`) || '';
     sel.innerHTML = `<option value="">${emptyLabel}</option>`;
@@ -2957,18 +3012,13 @@ async function loadSettingsTab() {
   // Load default settings
   const def = await getMapelSettings('__none__'); // gets fallback or default doc
   const defDoc = settingsCache['default'] || SETTINGS_FALLBACK;
-  document.getElementById('def-jumlah-tugas').value = defDoc.jumlahTugas;
-  document.getElementById('def-jumlah-uh').value = defDoc.jumlahUH;
-  document.getElementById('def-ada-uts').checked = defDoc.adaUTS;
-  document.getElementById('def-bobot-formatif').value = defDoc.bobotFormatif;
-  document.getElementById('def-bobot-formatif-label').textContent = defDoc.bobotFormatif;
-  document.getElementById('def-bobot-sumatif-label').textContent = defDoc.bobotSumatif;
+  fillBobotForm('def', defDoc);
   // Load overrides list
   renderMapelOverridesList();
 }
 
 async function renderMapelOverridesList() {
-  const listEl = document.getElementById('mapel-overrides-list');
+  const listEl = $('mapel-overrides-list');
   listEl.innerHTML = '';
   try {
     const snap = await db.collection('settings').get();
@@ -2991,7 +3041,7 @@ async function renderMapelOverridesList() {
         chip.style.cssText = 'margin:3px;font-size:11px;cursor:pointer;';
         chip.title = `Tugas: ${data.jumlahTugas}, UH: ${data.jumlahUH}, UTS: ${data.adaUTS?'Ya':'Tidak'}, Bobot: ${data.bobotFormatif}/${data.bobotSumatif}`;
         chip.textContent = `${m ? m.icon + ' ' + m.nama : d.id} X`;
-        chip.onclick = () => { document.getElementById('settings-mapel-select').value = d.id; loadMapelSettingsForm(); };
+        chip.onclick = () => { $('settings-mapel-select').value = d.id; loadMapelSettingsForm(); };
         listEl.appendChild(chip);
       });
     }
@@ -3009,8 +3059,8 @@ async function renderMapelOverridesList() {
         chip.title = `Tugas: ${data.jumlahTugas}, UH: ${data.jumlahUH}, UTS: ${data.adaUTS?'Ya':'Tidak'}, Bobot: ${data.bobotFormatif}/${data.bobotSumatif}`;
         chip.textContent = `${m ? m.icon + ' ' + m.nama : mId} — ${kId}`;
         chip.onclick = () => {
-          document.getElementById('settings-mapel-select').value = mId;
-          const kelasEl = document.getElementById('settings-kelas-select');
+          $('settings-mapel-select').value = mId;
+          const kelasEl = $('settings-kelas-select');
           if (kelasEl) kelasEl.value = kId;
           loadMapelSettingsForm();
         };
@@ -3021,11 +3071,11 @@ async function renderMapelOverridesList() {
 }
 
 async function loadMapelSettingsForm() {
-  const mapelId = document.getElementById('settings-mapel-select').value;
-  const kelasEl = document.getElementById('settings-kelas-select');
+  const mapelId = $('settings-mapel-select').value;
+  const kelasEl = $('settings-kelas-select');
   const kelasId = kelasEl?.value || '';
-  const formEl = document.getElementById('mapel-settings-form');
-  const kelasGroup = document.getElementById('settings-kelas-group');
+  const formEl = $('mapel-settings-form');
+  const kelasGroup = $('settings-kelas-group');
   if (!mapelId) {
     formEl.style.display = 'none';
     if (kelasGroup) kelasGroup.style.display = 'none';
@@ -3038,31 +3088,18 @@ async function loadMapelSettingsForm() {
   const contextLabel = kelasId
     ? `Default (dari mapel/global): ${defSettings.jumlahTugas} tugas, ${defSettings.jumlahUH} UH, UTS: ${defSettings.adaUTS?'Ya':'Tidak'}, Bobot ${defSettings.bobotFormatif}%/${defSettings.bobotSumatif}%`
     : `Default global: ${defSettings.jumlahTugas} tugas, ${defSettings.jumlahUH} UH, UTS: ${defSettings.adaUTS?'Ya':'Tidak'}, Bobot ${defSettings.bobotFormatif}%/${defSettings.bobotSumatif}%`;
-  document.getElementById('mapel-settings-default-info').textContent = contextLabel;
+  $('mapel-settings-default-info').textContent = contextLabel;
 
   const docKey = kelasId ? `${mapelId}_${kelasId}` : mapelId;
   try {
     const doc = await db.collection('settings').doc(docKey).get();
     const data = doc.exists ? { ...SETTINGS_FALLBACK, ...doc.data() } : defSettings;
-    document.getElementById('mp-jumlah-tugas').value = data.jumlahTugas;
-    document.getElementById('mp-jumlah-uh').value = data.jumlahUH;
-    document.getElementById('mp-ada-uts').checked = data.adaUTS;
-    document.getElementById('mp-bobot-formatif').value = data.bobotFormatif;
-    document.getElementById('mp-bobot-formatif-label').textContent = data.bobotFormatif;
-    document.getElementById('mp-bobot-sumatif-label').textContent = data.bobotSumatif;
+    fillBobotForm('mp', data);
   } catch (e) { showToast('Gagal memuat settings: ' + e.message, 'error'); }
 }
 
 async function saveDefaultSettings() {
-  const data = {
-    jumlahTugas: parseInt(document.getElementById('def-jumlah-tugas').value) || 6,
-    jumlahUH:    parseInt(document.getElementById('def-jumlah-uh').value) || 7,
-    adaUTS:      document.getElementById('def-ada-uts').checked,
-    bobotFormatif: parseInt(document.getElementById('def-bobot-formatif').value) || 60,
-    bobotSumatif:  100 - (parseInt(document.getElementById('def-bobot-formatif').value) || 60),
-    updatedBy: currentUser?.uid || '',
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-  };
+  const data = readBobotForm('def');
   try {
     await db.collection('settings').doc('default').set(data);
     settingsCache = {}; // invalidate all
@@ -3072,20 +3109,11 @@ async function saveDefaultSettings() {
 }
 
 async function saveMapelSettings() {
-  const mapelId = document.getElementById('settings-mapel-select').value;
+  const mapelId = $('settings-mapel-select').value;
   if (!mapelId) return;
-  const kelasId = document.getElementById('settings-kelas-select')?.value || '';
+  const kelasId = $('settings-kelas-select')?.value || '';
   const docKey = kelasId ? `${mapelId}_${kelasId}` : mapelId;
-  const bobotF = parseInt(document.getElementById('mp-bobot-formatif').value) || 60;
-  const data = {
-    jumlahTugas: parseInt(document.getElementById('mp-jumlah-tugas').value) || 6,
-    jumlahUH:    parseInt(document.getElementById('mp-jumlah-uh').value) || 7,
-    adaUTS:      document.getElementById('mp-ada-uts').checked,
-    bobotFormatif: bobotF,
-    bobotSumatif: 100 - bobotF,
-    updatedBy: currentUser?.uid || '',
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-  };
+  const data = readBobotForm('mp');
   try {
     await db.collection('settings').doc(docKey).set(data);
     delete settingsCache[docKey];
@@ -3095,9 +3123,9 @@ async function saveMapelSettings() {
 }
 
 async function resetMapelSettings() {
-  const mapelId = document.getElementById('settings-mapel-select').value;
+  const mapelId = $('settings-mapel-select').value;
   if (!mapelId) return;
-  const kelasId = document.getElementById('settings-kelas-select')?.value || '';
+  const kelasId = $('settings-kelas-select')?.value || '';
   const docKey = kelasId ? `${mapelId}_${kelasId}` : mapelId;
   if (!confirm('Hapus override pengaturan ini? Akan menggunakan setting default.')) return;
   try {
@@ -3110,28 +3138,28 @@ async function resetMapelSettings() {
 }
 
 async function loadSikapSettingsForm() {
-  const kelas = document.getElementById('sikap-kelas-select').value;
-  const formEl = document.getElementById('sikap-settings-form');
+  const kelas = $('sikap-kelas-select').value;
+  const formEl = $('sikap-settings-form');
   if (!kelas) { formEl.style.display = 'none'; return; }
   formEl.style.display = 'block';
   try {
     const doc = await db.collection('settings').doc(`sikap_${kelas}`).get();
-    document.getElementById('sikap-spiritual-deskripsi').value = doc.exists ? (doc.data().deskripsiSpiritual || '') : '';
-    document.getElementById('sikap-sosial-deskripsi').value   = doc.exists ? (doc.data().deskripsiSosial    || '') : '';
+    $('sikap-spiritual-deskripsi').value = doc.exists ? (doc.data().deskripsiSpiritual || '') : '';
+    $('sikap-sosial-deskripsi').value   = doc.exists ? (doc.data().deskripsiSosial    || '') : '';
   } catch (_) {
-    document.getElementById('sikap-spiritual-deskripsi').value = '';
-    document.getElementById('sikap-sosial-deskripsi').value   = '';
+    $('sikap-spiritual-deskripsi').value = '';
+    $('sikap-sosial-deskripsi').value   = '';
   }
 }
 
 async function saveSikapSettings() {
-  const kelas = document.getElementById('sikap-kelas-select').value;
+  const kelas = $('sikap-kelas-select').value;
   if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
   const data = {
-    deskripsiSpiritual: document.getElementById('sikap-spiritual-deskripsi').value.trim(),
-    deskripsiSosial:    document.getElementById('sikap-sosial-deskripsi').value.trim(),
+    deskripsiSpiritual: $('sikap-spiritual-deskripsi').value.trim(),
+    deskripsiSosial:    $('sikap-sosial-deskripsi').value.trim(),
     updatedBy: currentUser?.uid || '',
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: serverTimestamp(),
   };
   try {
     await db.collection('settings').doc(`sikap_${kelas}`).set(data);
@@ -3143,20 +3171,15 @@ async function saveSikapSettings() {
 async function showNilaiSettings() {
   const mapelId = currentInputMapelId;
   const mapel = (mapelCache || MAPEL_LIST).find(m => m.id === mapelId);
-  document.getElementById('modal-settings-title').textContent = `Pengaturan — ${mapel?.nama || mapelId} · Kelas ${currentInputKelas}`;
+  $('modal-settings-title').textContent = `Pengaturan — ${mapel?.nama || mapelId} · Kelas ${currentInputKelas}`;
 
   const defSettings = await getMapelSettings('__none__'); // fallback
   const actualDef = settingsCache['default'] || SETTINGS_FALLBACK;
-  document.getElementById('guru-settings-default-info').textContent =
+  $('guru-settings-default-info').textContent =
     `Default: ${actualDef.jumlahTugas} tugas, ${actualDef.jumlahUH} UH, UTS: ${actualDef.adaUTS?'Ya':'Tidak'}, Bobot ${actualDef.bobotFormatif}%/${actualDef.bobotSumatif}%`;
 
   const cur = currentNilaiSettings || await getMapelSettings(mapelId, currentInputKelas);
-  document.getElementById('guru-mp-jumlah-tugas').value = cur.jumlahTugas;
-  document.getElementById('guru-mp-jumlah-uh').value = cur.jumlahUH;
-  document.getElementById('guru-mp-ada-uts').checked = cur.adaUTS;
-  document.getElementById('guru-mp-bobot-formatif').value = cur.bobotFormatif;
-  document.getElementById('guru-mp-bobot-formatif-label').textContent = cur.bobotFormatif;
-  document.getElementById('guru-mp-bobot-sumatif-label').textContent = cur.bobotSumatif;
+  fillBobotForm('guru-mp', cur);
   openModal('modal-pengaturan-nilai');
 }
 
@@ -3164,16 +3187,7 @@ async function saveGuruMapelSettings() {
   const mapelId = currentInputMapelId;
   const kelasId = currentInputKelas;
   const settingsKey = `${mapelId}_${kelasId}`;
-  const bobotF = parseInt(document.getElementById('guru-mp-bobot-formatif').value) || 60;
-  const data = {
-    jumlahTugas: parseInt(document.getElementById('guru-mp-jumlah-tugas').value) || 6,
-    jumlahUH:    parseInt(document.getElementById('guru-mp-jumlah-uh').value) || 7,
-    adaUTS:      document.getElementById('guru-mp-ada-uts').checked,
-    bobotFormatif: bobotF,
-    bobotSumatif: 100 - bobotF,
-    updatedBy: currentUser?.uid || '',
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-  };
+  const data = readBobotForm('guru-mp');
   try {
     await db.collection('settings').doc(settingsKey).set(data);
     delete settingsCache[settingsKey];
@@ -3199,7 +3213,7 @@ async function resetGuruMapelSettings() {
 
 // ─── ADMIN: NILAI VIEW ────────────────────────────────
 async function populateMapelSelect(selectId) {
-  const sel = document.getElementById(selectId);
+  const sel = $(selectId);
   if (!sel) return;
   sel.innerHTML = '<option value="">-- Pilih Mapel --</option>';
   const list = await getMapelList();
@@ -3209,14 +3223,14 @@ async function populateMapelSelect(selectId) {
 }
 
 async function loadAdminNilai() {
-  const mapelId = document.getElementById('admin-mapel-select').value;
-  const kelas = document.getElementById('admin-kelas-select')?.value || '';
-  const container = document.getElementById('admin-nilai-view');
+  const mapelId = $('admin-mapel-select').value;
+  const kelas = $('admin-kelas-select')?.value || '';
+  const container = $('admin-nilai-view');
   if (!mapelId) {
-    container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Pilih mapel untuk melihat nilai</p></div>';
+    container.innerHTML = emptyStateHTML('📋', 'Pilih mapel untuk melihat nilai');
     return;
   }
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  container.innerHTML = loadingHTML();
   try {
     const [allSiswa, snap, settings] = await Promise.all([
       getAllSiswa(),
@@ -3228,7 +3242,7 @@ async function loadAdminNilai() {
     const siswaFilter = kelas ? allSiswa.filter(sw => sw.kelas === kelas) : allSiswa;
     container.innerHTML = renderNilaiTable(mapelId, siswaFilter, nilaiMap, true, settings, settings.deskripsi || '');
   } catch (e) {
-    container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+    container.innerHTML = emptyStateHTML("", e.message);
   }
 }
 
@@ -3238,7 +3252,7 @@ function switchNilaiSubTab(tab) {
   document.querySelectorAll('.sub-tab-content').forEach(t => t.classList.remove('active'));
   const activeBtn = document.querySelector(`.sub-tab-item[onclick="switchNilaiSubTab('${tab}')"]`);
   if (activeBtn) activeBtn.classList.add('active');
-  const el = document.getElementById(`sub-tab-nilai-${tab}`);
+  const el = $(`sub-tab-nilai-${tab}`);
   if (el) el.classList.add('active');
 
   if (tab === 'rapor') {
@@ -3261,15 +3275,15 @@ async function getNilaiRaporSemMap() {
 }
 
 async function loadRaporSemView() {
-  const container = document.getElementById('raport-sem-view');
+  const container = $('raport-sem-view');
   if (!container) return;
-  const kelasFilter = document.getElementById('raport-sem-kelas-select')?.value || '';
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const kelasFilter = $('raport-sem-kelas-select')?.value || '';
+  container.innerHTML = loadingHTML();
   try {
     const [raporMap, allSiswa] = await Promise.all([getNilaiRaporSemMap(), getAllSiswa()]);
 
     if (Object.keys(raporMap).length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Belum ada data. Upload file Excel Rekapitulasi.</p></div>';
+      container.innerHTML = emptyStateHTML('📊', 'Belum ada data. Upload file Excel Rekapitulasi.');
       return;
     }
 
@@ -3282,11 +3296,11 @@ async function loadRaporSemView() {
       .filter(Boolean);
 
     if (ordered.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Tidak ada data untuk kelas ini.</p></div>';
+      container.innerHTML = emptyStateHTML('📊', 'Tidak ada data untuk kelas ini.');
       return;
     }
 
-    const fmt = v => (v != null && !isNaN(v)) ? Math.round(+v) : '-';
+    const fmt = fmtNilai;
     const showKelas = !kelasFilter;
 
     let html = `<div class="nilai-table-wrap"><table class="nilai-table">
@@ -3331,7 +3345,7 @@ async function loadRaporSemView() {
     html += '</tbody></table></div>';
     container.innerHTML = html;
   } catch (e) {
-    container.innerHTML = `<div class="empty-state"><p>Error: ${e.message}</p></div>`;
+    container.innerHTML = emptyStateHTML("", `Error: ${e.message}`);
   }
 }
 
@@ -3355,7 +3369,7 @@ async function saveRaporSemNilai(nisn, field, rawVal, inputEl) {
   const newVal = trimmed === '' ? null : parseFloat(trimmed);
   if (newVal !== null && isNaN(newVal)) { loadRaporSemView(); return; }
 
-  const fmt = v => (v != null && !isNaN(v)) ? Math.round(+v) : '-';
+  const fmt = fmtNilai;
 
   // Collect current row values from sibling cells
   const row = cell.closest('tr');
@@ -3375,7 +3389,7 @@ async function saveRaporSemNilai(nisn, field, rawVal, inputEl) {
   try {
     await db.collection('nilaiRaporSemester').doc(nisn).update({
       [field]: newVal, rataKeseluruhan,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      updatedAt: serverTimestamp()
     });
 
     // Update cache
@@ -3389,7 +3403,7 @@ async function saveRaporSemNilai(nisn, field, rawVal, inputEl) {
     cell.classList.add('saved');
     setTimeout(() => cell.classList.remove('saved'), 1200);
 
-    const rataEl = document.getElementById(`rata-${nisn}`);
+    const rataEl = $(`rata-${nisn}`);
     if (rataEl) rataEl.textContent = fmt(rataKeseluruhan);
   } catch (e) {
     cell.classList.remove('saving');
@@ -3399,7 +3413,7 @@ async function saveRaporSemNilai(nisn, field, rawVal, inputEl) {
 }
 
 async function downloadNilaiIjazahTemplate() {
-  const btn = document.getElementById('btn-download-ijazah-template');
+  const btn = $('btn-download-ijazah-template');
   if (btn) { btn.textContent = '⏳ Menyiapkan...'; btn.disabled = true; }
   try {
     const [allSiswa, mapelListAll] = await Promise.all([getAllSiswa(), getMapelList()]);
@@ -3441,7 +3455,7 @@ async function handleNilaiIjazahUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
   event.target.value = '';
-  const btn = document.getElementById('upload-nilai-ijazah-btn');
+  const btn = $('upload-nilai-ijazah-btn');
   if (btn) { btn.textContent = '⏳ Memproses...'; btn.disabled = true; }
   try {
     const arrayBuf = await file.arrayBuffer();
@@ -3507,7 +3521,7 @@ async function handleNilaiIjazahUpload(event) {
           const raw = row[parseInt(colIdx)];
           if (raw == null || raw === '') return;
           const n = parseFloat(raw);
-          if (!isNaN(n)) result.push({ nisn: nisnRaw, mapelId: mapel.id, value: Math.min(100, Math.max(0, n)) });
+          if (!isNaN(n)) result.push({ nisn: nisnRaw, mapelId: mapel.id, value: clamp100(n) });
         });
       }
       return result;
@@ -3544,15 +3558,15 @@ async function handleNilaiIjazahUpload(event) {
       const { sw, mapelId } = entry;
       const data = {
         mapelId, nomorPeserta: sw.nomor, nisn: sw.nisn, nama: sw.nama, kelas: sw.kelas,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        updatedAt: serverTimestamp()
       };
       if (entry.nilaiUM     !== undefined) data.nilaiUM     = entry.nilaiUM;
       if (entry.nilaiRapor  !== undefined) data.nilaiRapor  = entry.nilaiRapor;
 
       const rata5Sem = raporSemMap[sw.nisn]?.rataKeseluruhan ?? null;
       const umForCalc = entry.nilaiUM !== undefined ? entry.nilaiUM : null;
-      if (umForCalc !== null && rata5Sem !== null)
-        data.nilaiIjazah = umForCalc * 0.4 + rata5Sem * 0.6;
+      const nilaiIjazah = hitungNilaiIjazah(umForCalc, rata5Sem);
+      if (nilaiIjazah !== null) data.nilaiIjazah = nilaiIjazah;
 
       batch.set(db.collection('nilai').doc(docKey), data, { merge: true });
       count++;
@@ -3591,7 +3605,7 @@ async function handleRaporSemUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
   event.target.value = '';
-  const btn = document.getElementById('upload-raport-sem-btn');
+  const btn = $('upload-raport-sem-btn');
   if (btn) { btn.textContent = '⏳ Memproses...'; btn.disabled = true; }
   try {
     const arrayBuf = await file.arrayBuffer();
@@ -3633,7 +3647,7 @@ async function handleRaporSemUpload(event) {
 
       batch.set(db.collection('nilaiRaporSemester').doc(nisn), {
         nisn, nama, s1, s2, s3, s4, s5, rataKeseluruhan,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        updatedAt: serverTimestamp()
       });
       count++;
     }
@@ -3653,8 +3667,9 @@ async function handleRaporSemUpload(event) {
           const nilaiUM = d.nilaiUM != null ? d.nilaiUM : null;
           const rs = newRaporMap[d.nisn] || {};
           const rata = rs.rataKeseluruhan != null ? rs.rataKeseluruhan : null;
-          if (nilaiUM !== null && rata !== null) {
-            batch2.update(doc.ref, { nilaiIjazah: +(nilaiUM * 0.4 + rata * 0.6).toFixed(4) });
+          const ijazah = hitungNilaiIjazah(nilaiUM, rata);
+          if (ijazah !== null) {
+            batch2.update(doc.ref, { nilaiIjazah: +ijazah.toFixed(4) });
             updateCount++;
           }
         });
@@ -3671,33 +3686,36 @@ async function handleRaporSemUpload(event) {
   }
 }
 
+// Data dasar untuk tampilan/export nilai ijazah satu kelas
+async function fetchIjazahDataset(kelas) {
+  const [allSiswa, mapelListAll, nilaiSnap, raporMap] = await Promise.all([
+    getAllSiswa(),
+    getMapelList(),
+    db.collection('nilai').where('kelas', '==', kelas).get(),
+    getNilaiRaporSemMap(),
+  ]);
+  const mapelList = mapelListAll.filter(m => m.kelompok !== 'B' || IJAZAH_MAPEL_B.has(m.id));
+  const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
+  // nilaiByKey: { mapelId__nomorPeserta → data }
+  const nilaiByKey = {};
+  nilaiSnap.docs.forEach(d => {
+    const dat = d.data();
+    nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat;
+  });
+  return { mapelList, siswaList, nilaiByKey, raporMap };
+}
+
 async function loadAdminNilaiIjazah() {
-  const kelas = document.getElementById('admin-kelas-ijazah-select')?.value || '';
-  const container = document.getElementById('admin-ijazah-view');
+  const kelas = $('admin-kelas-ijazah-select')?.value || '';
+  const container = $('admin-ijazah-view');
   if (!kelas) {
-    container.innerHTML = '<div class="empty-state"><div class="icon">🎓</div><p>Pilih kelas untuk melihat nilai ijazah</p></div>';
+    container.innerHTML = emptyStateHTML('🎓', 'Pilih kelas untuk melihat nilai ijazah');
     return;
   }
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  container.innerHTML = loadingHTML();
   try {
-    const [allSiswa, mapelListAll, nilaiSnap, raporMap] = await Promise.all([
-      getAllSiswa(),
-      getMapelList(),
-      db.collection('nilai').where('kelas', '==', kelas).get(),
-      getNilaiRaporSemMap(),
-    ]);
-    const mapelList = mapelListAll.filter(m => m.kelompok !== 'B' || IJAZAH_MAPEL_B.has(m.id));
-
-    const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
-
-    // nilaiByMapelNomor: { mapelId_nomor → data }
-    const nilaiByKey = {};
-    nilaiSnap.docs.forEach(d => {
-      const dat = d.data();
-      nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat;
-    });
-
-    const fmt = v => (v != null && !isNaN(v)) ? Math.round(+v) : '-';
+    const { mapelList, siswaList, nilaiByKey, raporMap } = await fetchIjazahDataset(kelas);
+    const fmt = fmtNilai;
 
     // Header baris mapel
     let mapelHeaders = '';
@@ -3723,10 +3741,7 @@ async function loadAdminNilaiIjazah() {
       const ijazahVals = [];
       mapelList.forEach(m => {
         const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
-        const um = n.nilaiUM != null ? n.nilaiUM : null;
-        const ijazah = n.nilaiIjazah != null
-          ? n.nilaiIjazah
-          : (um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null);
+        const ijazah = getIjazahValue(n, rata);
         if (ijazah !== null) ijazahVals.push(ijazah);
         mapelCells += `<td style="text-align:center;"><span class="nilai-computed ijazah">${fmt(ijazah)}</span></td>`;
       });
@@ -3748,26 +3763,18 @@ async function loadAdminNilaiIjazah() {
     html += '</tbody></table></div>';
     container.innerHTML = html;
   } catch (e) {
-    container.innerHTML = `<div class="empty-state"><p>Error: ${e.message}</p></div>`;
+    container.innerHTML = emptyStateHTML("", `Error: ${e.message}`);
   }
 }
 
 // ─── EXPORT NILAI IJAZAH ──────────────────────────────
 async function exportIjazahExcel() {
-  const kelas = document.getElementById('admin-kelas-ijazah-select')?.value || '';
+  const kelas = $('admin-kelas-ijazah-select')?.value || '';
   if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
   showToast('Menyiapkan export Excel...', '');
   try {
-    const [allSiswa, mapelListAll, nilaiSnap, raporMap] = await Promise.all([
-      getAllSiswa(), getMapelList(),
-      db.collection('nilai').where('kelas', '==', kelas).get(),
-      getNilaiRaporSemMap(),
-    ]);
-    const mapelList = mapelListAll.filter(m => m.kelompok !== 'B' || IJAZAH_MAPEL_B.has(m.id));
-    const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
-    const nilaiByKey = {};
-    nilaiSnap.docs.forEach(d => { const dat = d.data(); nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat; });
-    const fmt = v => (v != null && !isNaN(v)) ? Math.round(+v) : '';
+    const { mapelList, siswaList, nilaiByKey, raporMap } = await fetchIjazahDataset(kelas);
+    const fmt = v => fmtNilai(v, '');
 
     const header = ['No', 'Nomor Peserta', 'NISN', 'Nama'];
     mapelList.forEach(m => header.push(m.nama));
@@ -3788,10 +3795,7 @@ async function exportIjazahExcel() {
       const ijazahVals = [];
       mapelList.forEach(m => {
         const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
-        const um = n.nilaiUM != null ? n.nilaiUM : null;
-        const ijazahRaw = n.nilaiIjazah != null
-          ? n.nilaiIjazah
-          : (um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null);
+        const ijazahRaw = getIjazahValue(n, rata);
         const ijazah = ijazahRaw !== null ? fmt(ijazahRaw) : '';
         if (ijazah !== '') ijazahVals.push(ijazah);
         row.push(ijazah);
@@ -3812,20 +3816,12 @@ async function exportIjazahExcel() {
 }
 
 async function exportIjazahPDF() {
-  const kelas = document.getElementById('admin-kelas-ijazah-select')?.value || '';
+  const kelas = $('admin-kelas-ijazah-select')?.value || '';
   if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
   showToast('Menyiapkan PDF...', '');
   try {
-    const [allSiswa, mapelListAll, nilaiSnap, raporMap] = await Promise.all([
-      getAllSiswa(), getMapelList(),
-      db.collection('nilai').where('kelas', '==', kelas).get(),
-      getNilaiRaporSemMap(),
-    ]);
-    const mapelList = mapelListAll.filter(m => m.kelompok !== 'B' || IJAZAH_MAPEL_B.has(m.id));
-    const siswaList = allSiswa.filter(sw => sw.kelas === kelas);
-    const nilaiByKey = {};
-    nilaiSnap.docs.forEach(d => { const dat = d.data(); nilaiByKey[`${dat.mapelId}__${dat.nomorPeserta}`] = dat; });
-    const fmt = v => (v != null && !isNaN(v)) ? Math.round(+v) : '-';
+    const { mapelList, siswaList, nilaiByKey, raporMap } = await fetchIjazahDataset(kelas);
+    const fmt = fmtNilai;
 
     const mapelHeaderHTML = mapelList.map(m => `<th>${m.nama}</th>`).join('');
     const rowsHTML = siswaList.map((sw, idx) => {
@@ -3835,10 +3831,7 @@ async function exportIjazahPDF() {
       const ijazahVals = [];
       mapelList.forEach(m => {
         const n = nilaiByKey[`${m.id}__${sw.nomor}`] || {};
-        const um = n.nilaiUM != null ? n.nilaiUM : null;
-        const ijazah = n.nilaiIjazah != null
-          ? n.nilaiIjazah
-          : (um !== null && rata !== null ? (um * 0.4 + rata * 0.6) : null);
+        const ijazah = getIjazahValue(n, rata);
         if (ijazah !== null) ijazahVals.push(ijazah);
         cells += `<td>${ijazah !== null ? fmt(ijazah) : '-'}</td>`;
       });
@@ -3880,18 +3873,18 @@ async function exportIjazahPDF() {
 
 // ─── ADMIN: MAPEL TAB ─────────────────────────────────
 async function loadMapelTab() {
-  const container = document.getElementById('mapel-list-container');
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const container = $('mapel-list-container');
+  container.innerHTML = loadingHTML();
   try {
     const check = await db.collection('mapel').limit(1).get();
-    const seedBtn = document.getElementById('seed-mapel-btn');
+    const seedBtn = $('seed-mapel-btn');
     if (seedBtn) seedBtn.style.display = check.empty ? 'inline-flex' : 'none';
 
     checkAndShowMigrasiBtn();
 
     const mapelList = await getMapelList(true);
     if (mapelList.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="icon">📚</div><p>Belum ada mata pelajaran. Klik "Seed Data Mapel" untuk mengisi data awal.</p></div>';
+      container.innerHTML = emptyStateHTML('📚', 'Belum ada mata pelajaran. Klik "Seed Data Mapel" untuk mengisi data awal.');
       return;
     }
     container.innerHTML = '';
@@ -3916,12 +3909,12 @@ async function loadMapelTab() {
     });
     loadPengampuTable();
   } catch (e) {
-    container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+    container.innerHTML = emptyStateHTML("", e.message);
   }
 }
 
 async function renderMapelKelasAktif(kelasAktif = []) {
-  const container = document.getElementById('mapel-kelas-aktif-list');
+  const container = $('mapel-kelas-aktif-list');
   if (!container) return;
   container.innerHTML = '<span style="font-size:12px;color:var(--text3);">Memuat...</span>';
   const kelasList = await getUniqueKelas();
@@ -3938,14 +3931,14 @@ async function renderMapelKelasAktif(kelasAktif = []) {
 }
 
 async function showAddMapel() {
-  document.getElementById('modal-mapel-title').textContent = 'Tambah Mapel';
-  document.getElementById('edit-mapel-id').value = '';
-  document.getElementById('mapel-kode').value = '';
-  document.getElementById('mapel-kode').disabled = false;
-  document.getElementById('mapel-nama').value = '';
-  document.getElementById('mapel-icon').value = '📚';
+  $('modal-mapel-title').textContent = 'Tambah Mapel';
+  $('edit-mapel-id').value = '';
+  $('mapel-kode').value = '';
+  $('mapel-kode').disabled = false;
+  $('mapel-nama').value = '';
+  $('mapel-icon').value = '📚';
   document.querySelector('input[name="mapel-kelompok"][value="A"]').checked = true;
-  document.getElementById('mapel-urut').value = '';
+  $('mapel-urut').value = '';
   openModal('modal-mapel');
   renderMapelKelasAktif([]);
 }
@@ -3954,22 +3947,22 @@ async function showEditMapel(mapelId) {
   const list = await getMapelList();
   const m = list.find(x => x.id === mapelId);
   if (!m) return;
-  document.getElementById('modal-mapel-title').textContent = 'Edit Mapel';
-  document.getElementById('edit-mapel-id').value = mapelId;
-  document.getElementById('mapel-kode').value = m.kode || mapelId;
-  document.getElementById('mapel-kode').disabled = true;
-  document.getElementById('mapel-nama').value = m.nama || '';
-  document.getElementById('mapel-icon').value = m.icon || '📚';
+  $('modal-mapel-title').textContent = 'Edit Mapel';
+  $('edit-mapel-id').value = mapelId;
+  $('mapel-kode').value = m.kode || mapelId;
+  $('mapel-kode').disabled = true;
+  $('mapel-nama').value = m.nama || '';
+  $('mapel-icon').value = m.icon || '📚';
   const kelRadio = document.querySelector(`input[name="mapel-kelompok"][value="${m.kelompok || 'A'}"]`);
   if (kelRadio) kelRadio.checked = true;
-  document.getElementById('mapel-urut').value = m.urut || '';
+  $('mapel-urut').value = m.urut || '';
   openModal('modal-mapel');
   renderMapelKelasAktif(m.kelasAktif || []);
 }
 
 async function buildPengampuForm(existingKelas) {
-  const el = document.getElementById('mapel-pengampu-list');
-  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const el = $('mapel-pengampu-list');
+  el.innerHTML = loadingHTML();
   const [kelasList, guruSnap] = await Promise.all([
     getUniqueKelas(),
     db.collection('users').where('role', '==', 'guru').get(),
@@ -3988,29 +3981,29 @@ async function buildPengampuForm(existingKelas) {
       </select>
     </div>`).join('');
   kelasList.forEach(k => {
-    const sel = document.getElementById(`pengampu-${k}`);
+    const sel = $(`pengampu-${k}`);
     if (sel && kelasGuruMap[k]) sel.value = kelasGuruMap[k];
   });
 }
 
 async function saveMapel() {
-  const editId = document.getElementById('edit-mapel-id').value;
-  const kode = (document.getElementById('mapel-kode').value || '').trim().toUpperCase();
-  const nama = document.getElementById('mapel-nama').value.trim();
-  const icon = document.getElementById('mapel-icon').value.trim() || '📚';
+  const editId = $('edit-mapel-id').value;
+  const kode = ($('mapel-kode').value || '').trim().toUpperCase();
+  const nama = $('mapel-nama').value.trim();
+  const icon = $('mapel-icon').value.trim() || '📚';
   const kelompok = document.querySelector('input[name="mapel-kelompok"]:checked')?.value || 'A';
-  const urut = parseInt(document.getElementById('mapel-urut').value) || 0;
+  const urut = parseInt($('mapel-urut').value) || 0;
   const kelasAktif = [...document.querySelectorAll('input[name="mapel-kelas-aktif"]:checked')].map(cb => cb.value);
-  const btn = document.getElementById('save-mapel-btn');
+  const btn = $('save-mapel-btn');
   if (!kode) { showToast('Kode mapel wajib diisi', 'error'); return; }
   if (!nama) { showToast('Nama mapel wajib diisi', 'error'); return; }
   btn.textContent = 'Menyimpan...'; btn.disabled = true;
   try {
     const docId = editId || kode;
-    const data = { kode, nama, icon, kelompok, urut, kelasAktif, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    const data = { kode, nama, icon, kelompok, urut, kelasAktif, updatedAt: serverTimestamp() };
     if (!editId) {
       data.kelas = [];
-      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      data.createdAt = serverTimestamp();
     }
     await db.collection('mapel').doc(docId).set(data, { merge: true });
     mapelCache = null;
@@ -4036,7 +4029,7 @@ async function deleteMapel(mapelId, nama) {
 }
 
 async function seedMapelData() {
-  const btn = document.getElementById('seed-mapel-btn');
+  const btn = $('seed-mapel-btn');
   btn.textContent = 'Menyimpan...'; btn.disabled = true;
   const seeded = await seedMapelIfEmpty();
   showToast(seeded ? 'Data mapel berhasil di-seed ✓' : 'Collection mapel sudah ada data', seeded ? 'success' : 'info');
@@ -4046,8 +4039,8 @@ async function seedMapelData() {
 
 // ─── GURU: MAPEL LIST ─────────────────────────────────
 async function loadGuruMapelList() {
-  const container = document.getElementById('guru-mapel-list');
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const container = $('guru-mapel-list');
+  container.innerHTML = loadingHTML();
   try {
     // Selalu fetch ulang dari Firestore agar perubahan pengampu oleh admin langsung tampil
     const uid = currentUser?.uid;
@@ -4062,7 +4055,7 @@ async function loadGuruMapelList() {
       currentGuruMapel = entries;
     }
     if (!currentGuruMapel.length) {
-      container.innerHTML = '<div class="empty-state"><div class="icon">📚</div><p>Belum ada mapel yang ditugaskan.<br>Hubungi admin.</p></div>';
+      container.innerHTML = emptyStateHTML('📚', 'Belum ada mapel yang ditugaskan.<br>Hubungi admin.');
       return;
     }
     const allSiswa = await getAllSiswa();
@@ -4098,7 +4091,7 @@ async function loadGuruMapelList() {
       container.appendChild(item);
     }
   } catch (e) {
-    container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+    container.innerHTML = emptyStateHTML("", e.message);
   }
 }
 
@@ -4107,7 +4100,7 @@ async function openInputNilai(mapelId) {
   currentInputMapelId = mapelId;
   currentNilaiSettings = null; // reset, will be loaded fresh
   const mapel = (mapelCache || MAPEL_LIST).find(m => m.id === mapelId) || {};
-  document.getElementById('input-mapel-title').textContent = `${mapel.nama || mapelId}`;
+  $('input-mapel-title').textContent = `${mapel.nama || mapelId}`;
 
   // Build kelas tabs — hanya kelas yang diizinkan untuk mapel ini
   const mapelEntry = currentGuruMapel.find(e => e.mapelId === mapelId);
@@ -4118,7 +4111,7 @@ async function openInputNilai(mapelId) {
     kelasList = await getUniqueKelas(); // kosong = semua kelas
   }
   currentInputKelas = kelasList[0] || '';
-  const klassesTabs = document.getElementById('kelas-tabs-input');
+  const klassesTabs = $('kelas-tabs-input');
   klassesTabs.innerHTML = kelasList.map(k =>
     `<button class="btn ${k===currentInputKelas?'btn-primary':'btn-ghost'} btn-sm" onclick="switchInputKelas('${k}')">${k}</button>`
   ).join('');
@@ -4129,7 +4122,7 @@ async function openInputNilai(mapelId) {
 
 function switchInputKelas(kelas) {
   currentInputKelas = kelas;
-  document.getElementById('input-kelas-title').textContent = `Kelas ${kelas}`;
+  $('input-kelas-title').textContent = `Kelas ${kelas}`;
   document.querySelectorAll('#kelas-tabs-input button').forEach(b => {
     b.className = b.textContent.trim() === kelas ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
   });
@@ -4137,9 +4130,9 @@ function switchInputKelas(kelas) {
 }
 
 async function loadInputNilaiTable() {
-  const container = document.getElementById('nilai-table-container');
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-  document.getElementById('input-kelas-title').textContent = `Kelas ${currentInputKelas}`;
+  const container = $('nilai-table-container');
+  container.innerHTML = loadingHTML();
+  $('input-kelas-title').textContent = `Kelas ${currentInputKelas}`;
 
   try {
     const [siswa, snap, settings] = await Promise.all([
@@ -4151,7 +4144,7 @@ async function loadInputNilaiTable() {
     const nilaiMap = {};
     snap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
     // Deskripsi hanya dari exact kelas settings, tidak ikut fallback level lain
-    const deskripsiEl = document.getElementById('input-deskripsi-mapel');
+    const deskripsiEl = $('input-deskripsi-mapel');
     if (deskripsiEl) {
       const exactKey = `${currentInputMapelId}_${currentInputKelas}`;
       deskripsiEl.value = settingsCache[exactKey]?.deskripsi || '';
@@ -4159,15 +4152,13 @@ async function loadInputNilaiTable() {
     const deskripsiInput = deskripsiEl?.value || '';
     container.innerHTML = renderNilaiTable(currentInputMapelId, siswa, nilaiMap, false, settings, deskripsiInput);
   } catch (e) {
-    container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+    container.innerHTML = emptyStateHTML("", e.message);
   }
 }
 
 function renderNilaiTable(mapelId, siswaList, nilaiMap, readOnly, settings, deskripsi = '') {
   const s = settings || SETTINGS_FALLBACK;
-  const fKeys = Array.from({length: s.jumlahTugas}, (_, i) => `f${i+1}`);
-  const uhKeys = Array.from({length: s.jumlahUH}, (_, i) => `uh${i+1}`);
-  const sumatifKeys = s.adaUTS ? [...uhKeys, 'uts'] : uhKeys;
+  const { fKeys, uhKeys, sumatifKeys } = getNilaiKeys(s);
   const formatifSpan = fKeys.length;
   const sumatifSpan = sumatifKeys.length;
 
@@ -4251,7 +4242,7 @@ function onNilaiBlur(el) {
   if (el.value === '') return;
   let v = parseFloat(el.value.replace(',', '.'));
   if (isNaN(v)) { el.value = ''; return; }
-  v = Math.min(100, Math.max(0, v));
+  v = clamp100(v);
   el.value = Math.round(v);
 }
 
@@ -4265,7 +4256,7 @@ function handlePaste(e, el) {
 
   e.preventDefault();
 
-  const container = document.getElementById('nilai-table-container');
+  const container = $('nilai-table-container');
   const allInputs = Array.from(container.querySelectorAll('input[type="text"]'));
   const startIdx = allInputs.indexOf(el);
   if (startIdx === -1) return;
@@ -4285,7 +4276,7 @@ function handlePaste(e, el) {
       const input = allInputs[idx];
       let cleaned = val.trim().replace(',', '.');
       const num = parseFloat(cleaned);
-      input.value = isNaN(num) ? '' : String(Math.min(100, Math.max(0, Math.round(num))));
+      input.value = isNaN(num) ? '' : String(clamp100(Math.round(num)));
       // Ambil nomor siswa dari id: inp_NOMOR_KEY
       const parts = input.id.split('_');
       if (parts.length >= 3) affectedNomors.add(parts[1]);
@@ -4297,65 +4288,46 @@ function handlePaste(e, el) {
 
 function computeNilai(nomor) {
   const s = currentNilaiSettings || SETTINGS_FALLBACK;
-  const fKeys = Array.from({length: s.jumlahTugas}, (_, i) => `f${i+1}`);
-  const uhKeys = Array.from({length: s.jumlahUH}, (_, i) => `uh${i+1}`);
-  const sumatifKeys = s.adaUTS ? [...uhKeys, 'uts'] : uhKeys;
+  const { fKeys, sumatifKeys } = getNilaiKeys(s);
 
-  const fInputs = fKeys.map(k => {
-    const el = document.getElementById(`inp_${nomor}_${k}`);
+  const readInput = k => {
+    const el = $(`inp_${nomor}_${k}`);
     return el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
-  });
-  const sInputs = sumatifKeys.map(k => {
-    const el = document.getElementById(`inp_${nomor}_${k}`);
-    return el && el.value !== '' ? parseFloat(el.value.replace(',', '.')) : null;
-  });
-
-  const hasAnyF = fInputs.some(v => v !== null);
-  const hasAnyS = sInputs.some(v => v !== null);
-  const A = hasAnyF ? fInputs.reduce((a, b) => a + (b ?? 0), 0) / fKeys.length : null;
-  const B = hasAnyS ? sInputs.reduce((a, b) => a + (b ?? 0), 0) / sumatifKeys.length : null;
-
-  let rapor = null;
-  if (A !== null && B !== null) rapor = (A * s.bobotFormatif + B * s.bobotSumatif) / 100;
-  else if (A !== null) rapor = A;
-  else if (B !== null) rapor = B;
+  };
+  const A = rataKomponen(fKeys.map(readInput), fKeys.length);
+  const B = rataKomponen(sumatifKeys.map(readInput), sumatifKeys.length);
+  const rapor = hitungNilaiRapor(A, B, s);
 
   const huruf = getNilaiHuruf(rapor);
-  const rapEl = document.getElementById(`rap_${nomor}`);
-  const hurEl = document.getElementById(`hur_${nomor}`);
+  const rapEl = $(`rap_${nomor}`);
+  const hurEl = $(`hur_${nomor}`);
   if (rapEl) rapEl.textContent = rapor !== null ? String(Math.round(rapor)) : '-';
   if (hurEl) {
     hurEl.textContent = huruf;
     hurEl.style.color = getNilaiHurufColor(huruf);
     hurEl.title = getNilaiHurufLabel(huruf);
   }
-  const dskEl = document.getElementById(`dsk_${nomor}`);
+  const dskEl = $(`dsk_${nomor}`);
   if (dskEl) {
-    const deskripsiMapel = document.getElementById('input-deskripsi-mapel')?.value || '';
+    const deskripsiMapel = $('input-deskripsi-mapel')?.value || '';
     const deskTeks = getDeskripsiNilai(huruf, deskripsiMapel);
     dskEl.innerHTML = deskTeks || '<span style="color:#9ca3af;">-</span>';
   }
 }
 
 async function saveAllNilai() {
-  const btn = document.getElementById('save-nilai-btn');
+  const btn = $('save-nilai-btn');
   btn.textContent = '⏳ Menyimpan...'; btn.disabled = true;
 
   const s = currentNilaiSettings || SETTINGS_FALLBACK;
-  const fKeys = Array.from({length: s.jumlahTugas}, (_, i) => `f${i+1}`);
-  const uhKeys = Array.from({length: s.jumlahUH}, (_, i) => `uh${i+1}`);
-  const sumatifKeys = s.adaUTS ? [...uhKeys, 'uts'] : uhKeys;
+  const { fKeys, sumatifKeys } = getNilaiKeys(s);
   const allKeys = [...fKeys, ...sumatifKeys];
   const settingsSnapshot = { jumlahTugas: s.jumlahTugas, jumlahUH: s.jumlahUH, adaUTS: s.adaUTS, bobotFormatif: s.bobotFormatif, bobotSumatif: s.bobotSumatif };
-  const deskripsiMapelSave = (document.getElementById('input-deskripsi-mapel')?.value || '').trim();
+  const deskripsiMapelSave = ($('input-deskripsi-mapel')?.value || '').trim();
 
   // Preload nilaiRaporSemester cache
   if (!nilaiRaporSemCache) {
-    try {
-      const _snap = await db.collection('nilaiRaporSemester').get();
-      nilaiRaporSemCache = {};
-      _snap.docs.forEach(d => { nilaiRaporSemCache[d.data().nisn] = d.data(); });
-    } catch (_) { nilaiRaporSemCache = {}; }
+    try { await getNilaiRaporSemMap(); } catch (_) { nilaiRaporSemCache = {}; }
   }
 
   try {
@@ -4367,46 +4339,35 @@ async function saveAllNilai() {
       const data = {
         mapelId: currentInputMapelId, nomorPeserta: sw.nomor,
         nisn: sw.nisn, nama: sw.nama, kelas: sw.kelas,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: serverTimestamp(),
         settingsSnapshot,
       };
       let hasData = false;
       allKeys.forEach(k => {
-        const el = document.getElementById(`inp_${sw.nomor}_${k}`);
+        const el = $(`inp_${sw.nomor}_${k}`);
         if (el && el.value !== '') {
           const v = parseFloat(el.value.replace(',', '.'));
-          data[k] = isNaN(v) ? null : Math.min(100, Math.max(0, Math.round(v)));
+          data[k] = isNaN(v) ? null : clamp100(Math.round(v));
           if (data[k] !== null) hasData = true;
         } else data[k] = null;
       });
 
-      const fInputsSave = fKeys.map(k => data[k]);
-      const sInputsSave = sumatifKeys.map(k => data[k]);
-      const hasAnyFSave = fInputsSave.some(v => v !== null);
-      const hasAnySave = sInputsSave.some(v => v !== null);
-      const A = hasAnyFSave ? fInputsSave.reduce((a, b) => a + (b ?? 0), 0) / fKeys.length : null;
-      const B = hasAnySave ? sInputsSave.reduce((a, b) => a + (b ?? 0), 0) / sumatifKeys.length : null;
-
-      if (A !== null && B !== null) data.nilaiRapor = (A * s.bobotFormatif + B * s.bobotSumatif) / 100;
-      else if (A !== null) data.nilaiRapor = A;
-      else if (B !== null) data.nilaiRapor = B;
-      else data.nilaiRapor = null;
+      const A = rataKomponen(fKeys.map(k => data[k]), fKeys.length);
+      const B = rataKomponen(sumatifKeys.map(k => data[k]), sumatifKeys.length);
+      data.nilaiRapor = hitungNilaiRapor(A, B, s);
       data.nilaiA = A;
       data.nilaiB = B;
 
       // Nilai UM — kosong = 0, rumus selalu dipakai penuh
-      const umEl = document.getElementById(`inp_${sw.nomor}_um`);
+      const umEl = $(`inp_${sw.nomor}_um`);
       const umRaw = umEl && umEl.value !== '' ? parseFloat(umEl.value.replace(',', '.')) : 0;
-      const umVal = isNaN(umRaw) ? 0 : Math.min(100, Math.max(0, Math.round(umRaw)));
+      const umVal = isNaN(umRaw) ? 0 : clamp100(Math.round(umRaw));
       data.nilaiUM = umEl && umEl.value !== '' ? umVal : null; // DB: null jika benar-benar kosong
       if (data.nilaiUM !== null) hasData = true;
 
       // Nilai Ijazah = UM×40% + Rata-rata Raport 5 Semester×60%
-      const _raporSem = (nilaiRaporSemCache || {})[sw.nisn];
-      const _rata5Sem = _raporSem?.rataKeseluruhan ?? null;
-      data.nilaiIjazah = data.nilaiUM !== null && _rata5Sem !== null
-        ? data.nilaiUM * 0.4 + _rata5Sem * 0.6
-        : null;
+      const _rata5Sem = (nilaiRaporSemCache || {})[sw.nisn]?.rataKeseluruhan ?? null;
+      data.nilaiIjazah = hitungNilaiIjazah(data.nilaiUM, _rata5Sem);
 
       // Nilai Huruf dan Deskripsi Rapor
       data.nilaiHuruf = getNilaiHuruf(data.nilaiRapor);
@@ -4421,11 +4382,11 @@ async function saveAllNilai() {
     await batch.commit();
 
     // Simpan deskripsi materi ke settings/{mapelId}_{kelasId}
-    const deskripsi = (document.getElementById('input-deskripsi-mapel')?.value || '').trim();
+    const deskripsi = ($('input-deskripsi-mapel')?.value || '').trim();
     const deskripsiKey = `${currentInputMapelId}_${currentInputKelas}`;
     try {
       await db.collection('settings').doc(deskripsiKey).set(
-        { deskripsi, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+        { deskripsi, updatedAt: serverTimestamp() },
         { merge: true }
       );
       delete settingsCache[deskripsiKey];
@@ -4446,8 +4407,8 @@ function backToGuruDashboard() {
 
 // ─── EXPORT EXCEL ─────────────────────────────────────
 async function exportExcel() {
-  const mapelId = document.getElementById('export-mapel-select').value;
-  const kelas = document.getElementById('export-kelas-select').value;
+  const mapelId = $('export-mapel-select').value;
+  const kelas = $('export-kelas-select').value;
   if (!mapelId) { showToast('Pilih mapel terlebih dahulu', 'error'); return; }
 
   const mapel = (mapelCache || MAPEL_LIST).find(m => m.id === mapelId) || { nama: mapelId };
@@ -4460,8 +4421,7 @@ async function exportExcel() {
       getMapelSettings(mapelId, kelas || null),
     ]);
     const s = settings;
-    const fKeys = Array.from({length: s.jumlahTugas}, (_, i) => `f${i+1}`);
-    const uhKeys = Array.from({length: s.jumlahUH}, (_, i) => `uh${i+1}`);
+    const { fKeys, uhKeys } = getNilaiKeys(s);
 
     const nilaiMap = {};
     snap.docs.forEach(d => { nilaiMap[d.data().nomorPeserta] = d.data(); });
@@ -4591,8 +4551,8 @@ const KOP_DEFAULTS = {
 let kopCache = null;
 
 function toggleEditorIdentitas() {
-  const body = document.getElementById('kop-editor-body');
-  const toggle = document.getElementById('kop-editor-toggle');
+  const body = $('kop-editor-body');
+  const toggle = $('kop-editor-toggle');
   const open = body.style.display === 'none';
   body.style.display = open ? 'block' : 'none';
   toggle.textContent = open ? '▲ Tutup' : '▼ Buka';
@@ -4604,7 +4564,7 @@ async function loadKopSettings() {
     const doc = await db.collection('settings').doc('kopSekolah').get();
     kopCache = doc.exists ? { ...KOP_DEFAULTS, ...doc.data() } : { ...KOP_DEFAULTS };
   } catch (_) { kopCache = { ...KOP_DEFAULTS }; }
-  const f = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  const f = (id, val) => { const el = $(id); if (el) el.value = val || ''; };
   f('kop-yayasan',  kopCache.yayasan);
   f('kop-pesantren',kopCache.pesantren);
   f('kop-sekolah',  kopCache.sekolah);
@@ -4616,7 +4576,7 @@ async function loadKopSettings() {
   f('kop-kepsek',   kopCache.kepsek);
   f('kop-kota',     kopCache.kota);
   if (kopCache.logoBase64) {
-    const prev = document.getElementById('kop-logo-preview');
+    const prev = $('kop-logo-preview');
     if (prev) prev.innerHTML = `<img src="${kopCache.logoBase64}" style="width:100%;height:100%;object-fit:contain;">`;
   }
 }
@@ -4630,7 +4590,7 @@ function handleLogoUpload(event) {
     const b64 = e.target.result;
     if (!kopCache) kopCache = { ...KOP_DEFAULTS };
     kopCache.logoBase64 = b64;
-    const prev = document.getElementById('kop-logo-preview');
+    const prev = $('kop-logo-preview');
     if (prev) prev.innerHTML = `<img src="${b64}" style="width:100%;height:100%;object-fit:contain;">`;
   };
   reader.readAsDataURL(file);
@@ -4639,9 +4599,9 @@ function handleLogoUpload(event) {
 function clearLogoKop() {
   if (!kopCache) kopCache = { ...KOP_DEFAULTS };
   kopCache.logoBase64 = '';
-  const prev = document.getElementById('kop-logo-preview');
+  const prev = $('kop-logo-preview');
   if (prev) prev.innerHTML = 'Logo';
-  const fi = document.getElementById('kop-logo-file');
+  const fi = $('kop-logo-file');
   if (fi) fi.value = '';
 }
 
@@ -4651,7 +4611,7 @@ async function saveEditorIdentitas() {
 }
 
 async function saveKopSettings(silent = false) {
-  const g = id => (document.getElementById(id)?.value || '').trim();
+  const g = id => ($(id)?.value || '').trim();
   const data = {
     yayasan:   g('kop-yayasan')   || KOP_DEFAULTS.yayasan,
     pesantren: g('kop-pesantren') || KOP_DEFAULTS.pesantren,
@@ -4664,7 +4624,7 @@ async function saveKopSettings(silent = false) {
     kepsek:    g('kop-kepsek')    || KOP_DEFAULTS.kepsek,
     kota:      g('kop-kota')      || KOP_DEFAULTS.kota,
     logoBase64: kopCache?.logoBase64 || '',
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: serverTimestamp(),
   };
   try {
     await db.collection('settings').doc('kopSekolah').set(data);
@@ -4682,7 +4642,7 @@ function handleTtdUpload(who, event) {
   const reader = new FileReader();
   reader.onload = e => {
     ttdStore[who] = e.target.result;
-    const prev = document.getElementById(`ttd-${who}-preview`);
+    const prev = $(`ttd-${who}-preview`);
     if (prev) prev.innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:60px;object-fit:contain;">`;
   };
   reader.readAsDataURL(file);
@@ -4690,9 +4650,9 @@ function handleTtdUpload(who, event) {
 
 function clearTtd(who) {
   ttdStore[who] = '';
-  const prev = document.getElementById(`ttd-${who}-preview`);
+  const prev = $(`ttd-${who}-preview`);
   if (prev) prev.innerHTML = 'Belum diupload';
-  const fi = document.getElementById(`ttd-${who}-file`);
+  const fi = $(`ttd-${who}-file`);
   if (fi) fi.value = '';
 }
 
@@ -4701,42 +4661,42 @@ async function loadGlobalRaporSettings() {
     const doc = await db.collection('settings').doc('raporExport_global').get();
     if (!doc.exists) return;
     const d = doc.data();
-    if (d.tanggal) document.getElementById('rapor-tanggal').value = d.tanggal;
-    if (d.bulan)   document.getElementById('rapor-bulan').value   = d.bulan;
-    if (d.tahun)   document.getElementById('rapor-tahun').value   = d.tahun;
-    const toggle = document.getElementById('ttd-online-toggle');
+    if (d.tanggal) $('rapor-tanggal').value = d.tanggal;
+    if (d.bulan)   $('rapor-bulan').value   = d.bulan;
+    if (d.tahun)   $('rapor-tahun').value   = d.tahun;
+    const toggle = $('ttd-online-toggle');
     if (d.useTtd) {
       toggle.checked = true;
-      document.getElementById('ttd-online-section').style.display = 'block';
+      $('ttd-online-section').style.display = 'block';
     }
     if (d.ttdWali) {
       ttdStore.wali = d.ttdWali;
-      document.getElementById('ttd-wali-preview').innerHTML =
+      $('ttd-wali-preview').innerHTML =
         `<img src="${d.ttdWali}" style="max-width:100%;max-height:60px;object-fit:contain;">`;
     }
     if (d.ttdKepsek) {
       ttdStore.kepsek = d.ttdKepsek;
-      document.getElementById('ttd-kepsek-preview').innerHTML =
+      $('ttd-kepsek-preview').innerHTML =
         `<img src="${d.ttdKepsek}" style="max-width:100%;max-height:60px;object-fit:contain;">`;
     }
   } catch (_) {}
 }
 
 async function loadRaporExportSettings() {
-  const kelas = document.getElementById('export-rapor-kelas').value;
+  const kelas = $('export-rapor-kelas').value;
   if (kelas) localStorage.setItem('lastKelas_export-rapor-kelas', kelas);
 }
 
 async function saveRaporExportSettings(silent = false) {
-  const useTtd = document.getElementById('ttd-online-toggle').checked;
+  const useTtd = $('ttd-online-toggle').checked;
   const data = {
-    tanggal: (document.getElementById('rapor-tanggal')?.value || '').trim(),
-    bulan:   (document.getElementById('rapor-bulan')?.value   || '').trim(),
-    tahun:   (document.getElementById('rapor-tahun')?.value   || '').trim(),
+    tanggal: ($('rapor-tanggal')?.value || '').trim(),
+    bulan:   ($('rapor-bulan')?.value   || '').trim(),
+    tahun:   ($('rapor-tahun')?.value   || '').trim(),
     useTtd,
     ttdWali:   useTtd ? (ttdStore.wali   || '') : '',
     ttdKepsek: useTtd ? (ttdStore.kepsek || '') : '',
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: serverTimestamp(),
   };
   try {
     await db.collection('settings').doc('raporExport_global').set(data);
@@ -4771,7 +4731,7 @@ const RAPOR_STRUCTURE = [
 ];
 
 async function exportRaporPDF() {
-  const kelas = document.getElementById('export-rapor-kelas').value;
+  const kelas = $('export-rapor-kelas').value;
   if (!kelas) { showToast('Pilih kelas terlebih dahulu', 'error'); return; }
 
   const win = window.open('', '_blank');
@@ -4812,12 +4772,12 @@ async function exportRaporPDF() {
     } catch (_) {}
     if (!namaWaliKelas) showToast('⚠️ Wali kelas belum diatur untuk kelas ini (atur di menu Siswa → Rombel)', 'error');
 
-    const tgl   = (document.getElementById('rapor-tanggal')?.value || '').trim();
-    const bulan = (document.getElementById('rapor-bulan')?.value   || '').trim();
-    const tahun = (document.getElementById('rapor-tahun')?.value   || '').trim();
+    const tgl   = ($('rapor-tanggal')?.value || '').trim();
+    const bulan = ($('rapor-bulan')?.value   || '').trim();
+    const tahun = ($('rapor-tahun')?.value   || '').trim();
     const tanggalRapor = (tgl && bulan && tahun) ? `${tgl} ${bulan} ${tahun}` : '_____________';
 
-    const useTtd = document.getElementById('ttd-online-toggle')?.checked;
+    const useTtd = $('ttd-online-toggle')?.checked;
     const ttdWali   = useTtd ? (ttdStore.wali   || '') : '';
     const ttdKepsek = useTtd ? (ttdStore.kepsek || '') : '';
 
@@ -5040,10 +5000,10 @@ ${kopHtml}
 
 // ─── MODAL HELPERS ────────────────────────────────────
 function openModal(id) {
-  document.getElementById(id).classList.add('active');
+  $(id).classList.add('active');
 }
 function closeModal(id) {
-  document.getElementById(id).classList.remove('active');
+  $(id).classList.remove('active');
 }
 document.querySelectorAll('.modal-overlay').forEach(m => {
   m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
@@ -5051,7 +5011,7 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 
 // ─── TOAST ────────────────────────────────────────────
 function showToast(msg, type = '') {
-  const c = document.getElementById('toast-container');
+  const c = $('toast-container');
   const t = document.createElement('div');
   t.className = `toast ${type}`;
   t.textContent = msg;
@@ -5061,10 +5021,10 @@ function showToast(msg, type = '') {
 
 // ─── PENGAMPU TABLE (MAPEL TAB) ──────────────────────
 async function loadPengampuTable() {
-  const container = document.getElementById('pengampu-table-container');
-  const saveBtn = document.getElementById('save-pengampu-btn');
+  const container = $('pengampu-table-container');
+  const saveBtn = $('save-pengampu-btn');
   if (!container) return;
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  container.innerHTML = loadingHTML();
   try {
     const [mapelList, kelasList, guruSnap] = await Promise.all([
       getMapelList(),
@@ -5137,7 +5097,7 @@ async function loadPengampuTable() {
 
     window._pengampuMeta = { mapelList, kelasList, guruList };
   } catch (e) {
-    container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+    container.innerHTML = emptyStateHTML("", e.message);
   }
 }
 
@@ -5147,10 +5107,10 @@ async function savePengampuTable() {
   const { mapelList, kelasList, guruList } = meta;
   const guruMap = {};
   guruList.forEach(g => { guruMap[g.uid] = g.nama || g.uid; });
-  const btn = document.getElementById('save-pengampu-btn');
+  const btn = $('save-pengampu-btn');
   if (btn) { btn.textContent = 'Menyimpan...'; btn.disabled = true; }
   try {
-    const container = document.getElementById('pengampu-table-container');
+    const container = $('pengampu-table-container');
     const batch = db.batch();
     mapelList.forEach(m => {
       const kelas = kelasList.map(k => {
@@ -5160,7 +5120,7 @@ async function savePengampuTable() {
       }).filter(Boolean);
       batch.update(db.collection('mapel').doc(m.id), {
         kelas,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
     });
     await batch.commit();
@@ -5174,10 +5134,10 @@ async function savePengampuTable() {
 
 // ─── SISWA SUB-TABS ──────────────────────────────────
 function switchSiswaSubTab(tab) {
-  const subSiswa = document.getElementById('siswa-sub-siswa');
-  const subRombel = document.getElementById('siswa-sub-rombel');
-  const btnSiswa = document.getElementById('siswa-subtab-btn-siswa');
-  const btnRombel = document.getElementById('siswa-subtab-btn-rombel');
+  const subSiswa = $('siswa-sub-siswa');
+  const subRombel = $('siswa-sub-rombel');
+  const btnSiswa = $('siswa-subtab-btn-siswa');
+  const btnRombel = $('siswa-subtab-btn-rombel');
   if (!subSiswa || !subRombel) return;
   subSiswa.style.display = tab === 'siswa' ? 'block' : 'none';
   subRombel.style.display = tab === 'rombel' ? 'block' : 'none';
@@ -5213,14 +5173,14 @@ async function getRombelList(forceRefresh = false) {
 function invalidateRombelCache() { rombelCache = null; }
 
 async function loadRombelTab() {
-  const container = document.getElementById('rombel-list-container');
+  const container = $('rombel-list-container');
   if (!container) return;
   container.innerHTML = '<div class="loading"><div class="spinner"></div>Memuat rombel...</div>';
   try {
     await checkAndShowFixKelasBtn();
     const list = await getRombelList(true);
     if (list.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="icon">🏫</div><p>Belum ada rombongan belajar.<br>Klik "+ Tambah Rombel" untuk memulai.</p></div>';
+      container.innerHTML = emptyStateHTML('🏫', 'Belum ada rombongan belajar.<br>Klik "+ Tambah Rombel" untuk memulai.');
       return;
     }
     let guruList = [];
@@ -5259,12 +5219,12 @@ async function loadRombelTab() {
       container.appendChild(card);
     });
   } catch (e) {
-    container.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+    container.innerHTML = emptyStateHTML("", e.message);
   }
 }
 
 async function saveWaliKelasRombel(rombelId) {
-  const sel = document.getElementById(`wali-select-${rombelId}`);
+  const sel = $(`wali-select-${rombelId}`);
   if (!sel) return;
   const guruUid  = sel.value;
   const guruNama = guruUid ? sel.options[sel.selectedIndex].textContent : '';
@@ -5287,7 +5247,7 @@ async function showTambahRombel() {
     if (existing.exists) { showToast(`Rombel "${trimmed}" sudah ada`, 'error'); return; }
     await db.collection('rombel').doc(trimmed).set({
       nama: trimmed,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdAt: serverTimestamp(),
     });
     invalidateRombelCache();
     showToast(`Rombel "${trimmed}" berhasil ditambahkan ✓`, 'success');
@@ -5300,22 +5260,13 @@ async function renameRombel(rombelId, currentNama) {
   if (!newNama || newNama.trim() === currentNama) return;
   const trimmed = newNama.trim();
   if (!confirm(`Rename rombel "${currentNama}" → "${trimmed}"?\n\nIni akan mengupdate data siswa, nilai, mapel, dan rombel.`)) return;
-  const CHUNK = 500;
   try {
     // Update siswa
     const siswaSnap = await db.collection('siswa').where('kelas', '==', rombelId).get();
-    for (let i = 0; i < siswaSnap.docs.length; i += CHUNK) {
-      const batch = db.batch();
-      siswaSnap.docs.slice(i, i + CHUNK).forEach(d => batch.update(d.ref, { kelas: trimmed }));
-      await batch.commit();
-    }
+    await batchCommitChunks(siswaSnap.docs, (batch, d) => batch.update(d.ref, { kelas: trimmed }));
     // Update nilai
     const nilaiSnap = await db.collection('nilai').where('kelas', '==', rombelId).get();
-    for (let i = 0; i < nilaiSnap.docs.length; i += CHUNK) {
-      const batch = db.batch();
-      nilaiSnap.docs.slice(i, i + CHUNK).forEach(d => batch.update(d.ref, { kelas: trimmed }));
-      await batch.commit();
-    }
+    await batchCommitChunks(nilaiSnap.docs, (batch, d) => batch.update(d.ref, { kelas: trimmed }));
     // Update mapel kelas[] array
     const mapelSnap = await db.collection('mapel').get();
     const mapelBatch = db.batch();
@@ -5331,8 +5282,8 @@ async function renameRombel(rombelId, currentNama) {
     const oldDoc = await db.collection('rombel').doc(rombelId).get();
     const renameBatch = db.batch();
     const newData = oldDoc.exists
-      ? { ...oldDoc.data(), nama: trimmed, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }
-      : { nama: trimmed, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+      ? { ...oldDoc.data(), nama: trimmed, updatedAt: serverTimestamp() }
+      : { nama: trimmed, createdAt: serverTimestamp() };
     renameBatch.set(db.collection('rombel').doc(trimmed), newData);
     if (oldDoc.exists) renameBatch.delete(db.collection('rombel').doc(rombelId));
     await renameBatch.commit();
@@ -5350,15 +5301,10 @@ async function deleteRombel(rombelId, nama, jumlahSiswa) {
     ? `Hapus rombel "${nama}" beserta ${jumlahSiswa} siswa di dalamnya?\n\nData nilai tidak ikut terhapus.`
     : `Hapus rombel "${nama}"?`;
   if (!confirm(msg)) return;
-  const CHUNK = 500;
   try {
     if (jumlahSiswa > 0) {
       const siswaSnap = await db.collection('siswa').where('kelas', '==', rombelId).get();
-      for (let i = 0; i < siswaSnap.docs.length; i += CHUNK) {
-        const batch = db.batch();
-        siswaSnap.docs.slice(i, i + CHUNK).forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
+      await batchCommitChunks(siswaSnap.docs, (batch, d) => batch.delete(d.ref));
     }
     await db.collection('rombel').doc(rombelId).delete();
     invalidateSiswaCache();
@@ -5372,8 +5318,8 @@ async function deleteRombel(rombelId, nama, jumlahSiswa) {
 async function showPindahRombel() {
   const n = selectedSiswaIds.size;
   if (n === 0) return;
-  document.getElementById('pindah-rombel-info').textContent = `Pindahkan ${n} siswa ke rombel:`;
-  const sel = document.getElementById('pindah-rombel-select');
+  $('pindah-rombel-info').textContent = `Pindahkan ${n} siswa ke rombel:`;
+  const sel = $('pindah-rombel-select');
   sel.innerHTML = '<option value="">-- Pilih Rombel --</option>';
   try {
     const list = await getRombelList();
@@ -5383,16 +5329,11 @@ async function showPindahRombel() {
 }
 
 async function doPindahRombel() {
-  const target = document.getElementById('pindah-rombel-select').value;
+  const target = $('pindah-rombel-select').value;
   if (!target) { showToast('Pilih rombel tujuan', 'error'); return; }
   const ids = [...selectedSiswaIds];
-  const CHUNK = 500;
   try {
-    for (let i = 0; i < ids.length; i += CHUNK) {
-      const batch = db.batch();
-      ids.slice(i, i + CHUNK).forEach(nomor => batch.update(db.collection('siswa').doc(nomor), { kelas: target }));
-      await batch.commit();
-    }
+    await batchCommitChunks(ids, (batch, nomor) => batch.update(db.collection('siswa').doc(nomor), { kelas: target }));
     invalidateSiswaCache();
     selectedSiswaIds.clear();
     closeModal('modal-pindah-rombel');
@@ -5410,18 +5351,17 @@ async function checkAndShowFixKelasBtn() {
       db.collection('siswa').where('kelas', '==', 'XII-1').limit(1).get(),
       db.collection('siswa').where('kelas', '==', 'XII-2').limit(1).get(),
     ]);
-    const btn = document.getElementById('btn-fix-kelas');
+    const btn = $('btn-fix-kelas');
     if (btn) btn.style.display = (!snap1.empty || !snap2.empty) ? 'inline-flex' : 'none';
   } catch (e) { console.error('checkAndShowFixKelasBtn:', e); }
 }
 
 async function fixNamaKelas() {
   if (!confirm('Fix nama kelas?\n\nXII-1 → IX-A\nXII-2 → IX-B\n\nOperasi ini akan mengupdate collection siswa, nilai, mapel, dan rombel.')) return;
-  const container = document.getElementById('rombel-list-container');
+  const container = $('rombel-list-container');
   container.innerHTML = '<div style="padding:16px;"><div style="font-weight:700;margin-bottom:8px;">🔧 Memproses fix nama kelas...</div><div id="fix-kelas-log" class="migrasi-log"></div></div>';
-  const addLog = msg => { const el = document.getElementById('fix-kelas-log'); if (el) el.innerHTML += `<div>${msg}</div>`; el.scrollTop = el.scrollHeight; };
+  const addLog = msg => { const el = $('fix-kelas-log'); if (el) el.innerHTML += `<div>${msg}</div>`; el.scrollTop = el.scrollHeight; };
   const mapping = { 'XII-1': 'IX-A', 'XII-2': 'IX-B' };
-  const CHUNK = 500;
   let totSiswa = 0, totNilai = 0, totMapel = 0, totRombel = 0;
   try {
     // Fix siswa
@@ -5429,11 +5369,7 @@ async function fixNamaKelas() {
       const snap = await db.collection('siswa').where('kelas', '==', oldK).get();
       if (!snap.empty) {
         addLog(`▶ Siswa: ${snap.size} dokumen "${oldK}" → "${newK}"`);
-        for (let i = 0; i < snap.docs.length; i += CHUNK) {
-          const batch = db.batch();
-          snap.docs.slice(i, i + CHUNK).forEach(d => batch.update(d.ref, { kelas: newK }));
-          await batch.commit();
-        }
+        await batchCommitChunks(snap.docs, (batch, d) => batch.update(d.ref, { kelas: newK }));
         totSiswa += snap.size;
       }
     }
@@ -5442,11 +5378,7 @@ async function fixNamaKelas() {
       const snap = await db.collection('nilai').where('kelas', '==', oldK).get();
       if (!snap.empty) {
         addLog(`▶ Nilai: ${snap.size} dokumen "${oldK}" → "${newK}"`);
-        for (let i = 0; i < snap.docs.length; i += CHUNK) {
-          const batch = db.batch();
-          snap.docs.slice(i, i + CHUNK).forEach(d => batch.update(d.ref, { kelas: newK }));
-          await batch.commit();
-        }
+        await batchCommitChunks(snap.docs, (batch, d) => batch.update(d.ref, { kelas: newK }));
         totNilai += snap.size;
       }
     }
@@ -5470,7 +5402,7 @@ async function fixNamaKelas() {
       const oldDoc = await db.collection('rombel').doc(oldId).get();
       if (oldDoc.exists) {
         const batch = db.batch();
-        batch.set(db.collection('rombel').doc(newId), { ...oldDoc.data(), nama: newId, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        batch.set(db.collection('rombel').doc(newId), { ...oldDoc.data(), nama: newId, updatedAt: serverTimestamp() });
         batch.delete(db.collection('rombel').doc(oldId));
         await batch.commit();
         totRombel++;
@@ -5483,11 +5415,11 @@ async function fixNamaKelas() {
     invalidateRombelCache();
 
     addLog(`\n✅ Selesai: ${totSiswa} siswa, ${totNilai} nilai, ${totMapel} mapel, ${totRombel} rombel`);
-    const logEl = document.getElementById('fix-kelas-log');
+    const logEl = $('fix-kelas-log');
     if (logEl) logEl.parentElement.insertAdjacentHTML('beforeend',
       `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="loadRombelTab()">Reload Rombel</button></div>`);
     showToast(`Fix selesai ✓`, 'success');
-    const btn = document.getElementById('btn-fix-kelas');
+    const btn = $('btn-fix-kelas');
     if (btn) btn.style.display = 'none';
   } catch (e) {
     showToast('Fix gagal: ' + e.message, 'error');
@@ -5503,19 +5435,19 @@ async function checkAndShowMigrasiBtn() {
       const mapel = d.data().mapel;
       return Array.isArray(mapel) && mapel.some(item => typeof item === 'string');
     });
-    const btn = document.getElementById('migrasi-guru-btn');
+    const btn = $('migrasi-guru-btn');
     if (btn) btn.style.display = hasOldFormat ? 'inline-flex' : 'none';
   } catch (e) { console.error('checkAndShowMigrasiBtn:', e); }
 }
 
 async function migrasiDataGuru() {
   if (!confirm('Mulai migrasi data guru lama ke format baru?\n\nProses ini akan membaca data guru dengan format mapel lama (array of strings) dan mengassign mereka ke kelas di collection mapel.')) return;
-  const container = document.getElementById('mapel-list-container');
+  const container = $('mapel-list-container');
   container.innerHTML = `<div style="padding:16px;">
     <div style="font-weight:700;margin-bottom:8px;">🔄 Migrasi berlangsung...</div>
     <div id="migrasi-log" class="migrasi-log"></div>
   </div>`;
-  const addLog = msg => { const el = document.getElementById('migrasi-log'); if (el) { el.innerHTML += `<div>${msg}</div>`; el.scrollTop = el.scrollHeight; } };
+  const addLog = msg => { const el = $('migrasi-log'); if (el) { el.innerHTML += `<div>${msg}</div>`; el.scrollTop = el.scrollHeight; } };
 
   let berhasil = 0, skip = 0, gagal = 0;
   try {
@@ -5525,9 +5457,9 @@ async function migrasiDataGuru() {
       return Array.isArray(mapel) && mapel.some(item => typeof item === 'string');
     });
     if (guruOld.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Tidak ada data guru format lama yang perlu dimigrasi.</p></div>';
+      container.innerHTML = emptyStateHTML('✅', 'Tidak ada data guru format lama yang perlu dimigrasi.');
       showToast('Tidak ada data untuk dimigrasi', 'success');
-      const btn = document.getElementById('migrasi-guru-btn');
+      const btn = $('migrasi-guru-btn');
       if (btn) btn.style.display = 'none';
       loadMapelTab();
       return;
@@ -5564,7 +5496,7 @@ async function migrasiDataGuru() {
     }
 
     mapelCache = null;
-    const logEl = document.getElementById('migrasi-log');
+    const logEl = $('migrasi-log');
     if (logEl) logEl.parentElement.insertAdjacentHTML('beforeend', `
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <span class="badge badge-green">✓ Berhasil: ${berhasil}</span>
@@ -5572,7 +5504,7 @@ async function migrasiDataGuru() {
         ${gagal > 0 ? `<span class="badge badge-red">✗ Gagal: ${gagal}</span>` : ''}
         <button class="btn btn-primary btn-sm" onclick="loadMapelTab()">Tutup & Reload</button>
       </div>`);
-    const btn = document.getElementById('migrasi-guru-btn');
+    const btn = $('migrasi-guru-btn');
     if (btn) btn.style.display = 'none';
     showToast(`Migrasi selesai: ${berhasil} berhasil, ${skip} skip ✓`, berhasil > 0 ? 'success' : '');
   } catch (e) {
@@ -5582,7 +5514,7 @@ async function migrasiDataGuru() {
 }
 
 // ─── ENTER KEY LOGIN ──────────────────────────────────
-document.getElementById('login-password').addEventListener('keydown', e => {
+$('login-password').addEventListener('keydown', e => {
   if (e.key === 'Enter') doLogin();
 });
 

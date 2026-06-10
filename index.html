@@ -1208,7 +1208,7 @@ select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,
 
           <!-- Batas Nilai Kelulusan -->
           <div class="form-group">
-            <label>Nilai Minimal Kelulusan <span style="font-size:10px;font-weight:400;color:var(--text3);">(rata-rata keseluruhan ≥ nilai ini = LULUS)</span></label>
+            <label>Nilai Minimal Kelulusan <span style="font-size:10px;font-weight:400;color:var(--text3);">(rata-rata nilai ijazah ≥ nilai ini = LULUS)</span></label>
             <input type="number" id="rapor-batas-lulus" min="0" max="100" value="55" style="text-align:center;">
           </div>
 
@@ -4715,7 +4715,7 @@ async function saveRaporExportSettings(silent = false) {
 // ─── EXPORT RAPOR PDF ─────────────────────────────────
 const BATAS_LULUS_DEFAULT = 55;
 
-// Ambang rata-rata keseluruhan untuk dinyatakan LULUS (diatur di Editor Identitas)
+// Ambang rata-rata nilai ijazah untuk dinyatakan LULUS (diatur di Editor Identitas)
 function getBatasLulus() {
   const v = parseFloat($('rapor-batas-lulus')?.value);
   return isNaN(v) ? BATAS_LULUS_DEFAULT : clamp100(v);
@@ -4798,7 +4798,29 @@ async function exportRaporPDF() {
     const ttdKepsek = useTtd ? (ttdStore.kepsek || '') : '';
     const batasLulus = getBatasLulus();
 
-    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}, sikapSettings, kop, namaWaliKelas, tanggalRapor, ttdWali, ttdKepsek, batasLulus));
+    // Status kelulusan dari rata-rata nilai ijazah (UM 40% + rata-rata raport sem 1-5 60%),
+    // konsisten dengan kolom "Rata-rata Nilai" pada tab Nilai Ijazah
+    let mapelIjazah = [];
+    let raporSemMap = {};
+    try {
+      const [mapelListAll, raporMap] = await Promise.all([getMapelList(), getNilaiRaporSemMap()]);
+      mapelIjazah = mapelListAll.filter(m => m.kelompok !== 'B' || IJAZAH_MAPEL_B.has(m.id));
+      raporSemMap = raporMap;
+    } catch (_) {}
+    const hitungStatusLulus = sw => {
+      const rata5Sem = raporSemMap[sw.nisn]?.rataKeseluruhan ?? null;
+      const nilaiSiswa = nilaiByStudent[sw.nomor] || {};
+      const vals = [];
+      mapelIjazah.forEach(m => {
+        const ijazah = getIjazahValue(nilaiSiswa[m.id] || {}, rata5Sem);
+        if (ijazah !== null) vals.push(ijazah);
+      });
+      if (!vals.length) return ''; // belum ada nilai ijazah — biarkan kosong
+      const rataIjazah = vals.reduce((a, b) => a + b, 0) / vals.length;
+      return rataIjazah >= batasLulus ? 'LULUS' : 'TIDAK LULUS';
+    };
+
+    const pages = siswaKelas.map(sw => buildRaporPage(sw, kelas, nilaiByStudent[sw.nomor] || {}, sikapSettings, kop, namaWaliKelas, tanggalRapor, ttdWali, ttdKepsek, hitungStatusLulus(sw)));
     const html = `<!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8">
 <title>Rapor ${kelas} - 2025/2026</title>
@@ -4832,7 +4854,7 @@ ${pages.join('\n')}
   }
 }
 
-function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, namaWaliKelas = '', tanggalRapor = '_____________', ttdWali = '', ttdKepsek = '', batasLulus = BATAS_LULUS_DEFAULT) {
+function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, namaWaliKelas = '', tanggalRapor = '_____________', ttdWali = '', ttdKepsek = '', statusLulus = '') {
   const K = { ...KOP_DEFAULTS, ...kop };
   const SPIRITUAL_MAPEL = ['ALQURAN_HADIS', 'TAUHID', 'FIKIH', 'SKI', 'BAHASA_ARAB'];
   const SOSIAL_MAPEL    = ['PPKN', 'IPS', 'IPA', 'PRAKARYA', 'KHOT', 'BAHASA_INDONESIA', 'BAHASA_INGGRIS'];
@@ -4854,11 +4876,6 @@ function buildRaporPage(sw, kelas, nilaiSiswa, sikapSettings = {}, kop = {}, nam
     E: 'Belum optimal, jadikan ini motivasi untuk bangkit dan berusaha lebih giat demi masa depan yang lebih cerah.',
   };
   const catatanOtomatis = CATATAN_MAP[hurufKeseluruhan] || '';
-
-  // Keterangan kelulusan otomatis dari rata-rata keseluruhan; kosong jika belum ada nilai
-  const statusLulus = rataRataKeseluruhan != null
-    ? (rataRataKeseluruhan >= batasLulus ? 'LULUS' : 'TIDAK LULUS')
-    : '';
 
   const spiritualAvg   = calcSikapAvg(SPIRITUAL_MAPEL);
   const sosialAvg      = calcSikapAvg(SOSIAL_MAPEL);
@@ -4988,7 +5005,7 @@ ${kopHtml}
 
 <table class="b" style="margin-bottom:10px">
   <tr>
-    <td style="padding:5px 10px;">Berdasarkan hasil yang dicapai pada semester ganjil dan genap, peserta didik dinyatakan :</td>
+    <td style="padding:5px 10px;">Berdasarkan hasil akumulasi nilai rapor semester 1–5 dan Nilai Ujian Madrasah, peserta didik dinyatakan :</td>
     <td style="width:150px;text-align:center;vertical-align:middle;font-weight:bold;font-size:12pt;letter-spacing:1px;">${statusLulus || '&nbsp;'}</td>
   </tr>
 </table>
